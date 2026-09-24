@@ -1,0 +1,31 @@
+Generated using built-in ImageGen. Phone screen is a conceptual illustration.
+
+Create a polished Turkish product explainer poster for the mobile app Wikipati. New image. This is a BRAND AND VALUE EXPLANATION: what the app does and why a pet owner would use it. NOT a user manual, NOT onboarding instructions, NOT labeled UI anatomy. Portrait 4:5 high resolution. Premium calm editorial design, warm cream #FAFAF6, deep forest green #284C3F, sage and warm sand. Sophisticated typography, beautiful readable Turkish text, ample whitespace. More informative than a slogan advertisement, less technical than a tutorial.
+
+Layout: small paw logo and lowercase "wikipati" at top. Strong hero headline exact:
+"Patili dostun hakkında bilgi.
+Bakımı için düzen."
+Short introduction exact:
+"Wikipati, evcil hayvan ansiklopedisini kişisel bakım takibiyle bir araya getirir."
+
+Middle: one restrained elegant phone mockup slightly right of center, not dominant, showing illustrative cream/green app overview with title "wikipati", search "Wikipati’de ara", small readable cards "Kedi bakımı" and "Bakım takvimim". Beside it a small warmly lit photorealistic tabby cat and golden retriever, tasteful and not covering text. Below/around this central visual organize three large distinct editorial feature blocks with thin separators and subtle icons (open book, health folder, calendar/bell). These feature blocks must occupy enough space to carry the explanation legibly, not tiny callouts.
+
+Feature block 1 exact heading:
+"Merak ettiğin bilgiyi keşfet"
+Exact supporting text:
+"Bakım, beslenme, davranış ve sağlık konularını kaynak bağlantılı maddelerden öğren."
+
+Feature block 2 exact heading:
+"Sağlık geçmişini bir arada tut"
+Exact supporting text:
+"Her dostun için profil oluştur; aşı, kilo, bakım notları ve belgelerini kaydet."
+
+Feature block 3 exact heading:
+"Bakım zamanlarını hatırla"
+Exact supporting text:
+"Kontrol ve bakım tarihlerini planla, telefon bildirimleriyle takip et."
+
+Closing line exact:
+"Daha bilinçli bakım. Daha düzenli takip."
+
+Typography: large elegant headline; extremely clear modern sans-serif for explanatory copy. All Turkish diacritics correct. Visual hierarchy should let someone immediately understand what Wikipati IS and its THREE core benefits. This is a carefully designed product overview to share with potential users. No numbers, no step-by-step sequence, no arrows pointing to buttons, no UI labels outside the phone, no 'kullanım rehberi', no 'nasıl kullanılır', no four-screen grids. No app store badges or download availability claims, no veterinary approval claims, no medical diagnosis or treatment suggestions, no cloud sync, no community, no invented feature. No added text beyond specified copy and limited phone labels. No handwritten filler slogans, no excessive decorative objects, no watermark.

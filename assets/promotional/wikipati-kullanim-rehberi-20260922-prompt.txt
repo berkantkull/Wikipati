@@ -1,0 +1,50 @@
+Generated using built-in ImageGen. Screens are illustrative, not literal application screenshots.
+
+Use case: infographic-diagram. Create a detailed Turkish visual USER GUIDE to the existing mobile app Wikipati. This is an informative onboarding poster, not an emotional advertisement. New standalone image, portrait high-resolution 2:3, very legible at full resolution. Clean professional editorial information design. Warm cream #FAFAF6 background, forest green #284C3F headings, sage panels, subtle thin gray-green rules. No animals, no photographs, no decorative plants. Four clearly labeled flat front-facing smartphone schematic screens arranged in a generous 2x2 grid, with large numbered headings and explanatory captions beneath each. Screens must be large enough to read. Thin leader lines and small numbered dots identify controls; avoid crossing lines. Use exact correct Turkish characters. Sans-serif body font, confident editorial heading. Keep whitespace and alignment precise.
+
+Top small brand: paw icon plus "wikipati"
+Main title exact: "Wikipati kullanım rehberi"
+Subtitle exact: "Bilgiyi keşfet, dostunun kayıtlarını tut, bakımını takip et."
+
+Panel 1 top left:
+Heading "01  Ansiklopedi"
+Phone screen: search field "Wikipati’de ara", species buttons "Kediler" "Köpekler", category chips "Bakım" "Beslenme" "Sağlık", list heading "Madde dizini", rows "Aşı takvimi", "Kedi bakımı", "Kedi beslenmesi". Bottom tabs "Ana sayfa" "Kütüphane" "Patilerim" "Takvim".
+Caption exact on separate concise lines:
+"ARA: Merak ettiğin konuyu yaz."
+"FİLTRELE: Tür ve konu seç."
+"KEŞFET: Maddeleri alfabetik listeden aç."
+
+Panel 2 top right:
+Heading "02  Madde okuma"
+Phone screen title "Kedi bakımı", summary "Günlük bakım için başlangıç rehberi.", information box "Bir bakışta" with "Kapsam: Kedi" and "İnceleme bekliyor", table of contents titled "İçindekiler" with "Genel bakım" and "Bakım rutini", bottom text links "İlgili maddeler" and "Kaynakça", a small bookmark control.
+Caption exact:
+"İÇİNDEKİLER: İlgili bölüme atla."
+"KAYNAKÇA: Bilginin kaynağını aç."
+"KAYDET: Maddeyi favorilerine ekle."
+
+Panel 3 bottom left:
+Heading "03  Patilerim"
+Phone screen sample pet profile labelled "Örnek profil", name "Pamuk", species "Kedi · Tekir", button "+ Sağlık veya bakım kaydı ekle", small rows "Aşı kayıtları", "Kilo takibi", "Belgeler ve notlar".
+Caption exact:
+"PROFİL: İsim, tür ve fotoğraf ekle."
+"KAYIT: Aşı, kilo ve bakım bilgilerini tut."
+"BELGE: Karne fotoğrafı veya PDF ekle."
+
+Panel 4 bottom right:
+Heading "04  Bakım takvimi"
+Phone screen heading "Bakım takvimim", button "+ Hatırlatma ekle", sample card "Örnek kayıt" "Veteriner kontrolü" "Pamuk · 12 Ekim", actions "Tamamlandı" and "1 gün ertele".
+Caption exact:
+"PLANLA: Bakım başlığını ve tarihini gir."
+"HATIRLAT: Telefon bildirim iznini aç."
+"TAKİP ET: Tamamla veya bir gün ertele."
+
+Below four panels a clear horizontal flow with simple arrows and exact title "Bilgiden bakıma"
+Steps exact: "Maddeyi oku" → "Bakım takvimime ekle" → "Tarihi belirle"
+Small footnote under the flow: "Kayıt oluşturmak için önce bir pati profili ekle."
+
+Bottom concise facts bar, larger than tiny legal text, three lines:
+"Kayıtlar bu cihazda saklanır."
+"Bildirimler için telefon izni gerekir."
+"Başlangıç maddeleri veteriner incelemesi bekliyor."
+
+Constraints: Do not claim cloud sync, login, sharing with vets, AI diagnosis, social community, app store availability, or veterinary approval. Do not invent controls outside those specified. No fake medical advice. All screen examples clearly labelled as examples. No promotional slogans, photorealistic pets, decorative clutter, app-store badges, or watermarks. Overall appearance: a useful, detailed, polished quick-start reference sheet with four screens and explicit readable explanations.

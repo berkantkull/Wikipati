@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Wikipati",
+    "slug": "wikipati",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wikipati.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.wikipati.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sharing",
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Wikipati, dostunuzun profil fotoğrafını seçmek için galerinize erişir.",
+          "microphonePermission": false,
+          "cameraPermission": false
+        }
+      ]
+    ]
+  }
+}
