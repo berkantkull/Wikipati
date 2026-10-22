@@ -1,17 +1,36 @@
 import type { Entry, Preferences, Store, TrashItem } from "./data";
 
+export function selectedDays(prefs: Preferences): number[] {
+  const values = Array.isArray(prefs.daysBefore)
+    ? prefs.daysBefore
+    : [prefs.daysBefore];
+  return [...new Set(values.filter((d) => [0, 1, 3].includes(d)))].sort(
+    (a, b) => b - a,
+  );
+}
+export function reminderDates(
+  value: string,
+  prefs: Preferences,
+  now = new Date(),
+): { daysBefore: number; date: Date }[] {
+  const day = new Date(value + "T00:00:00");
+  if (!Number.isFinite(day.getTime())) return [];
+  day.setHours(prefs.hour, prefs.minute || 0, 0, 0);
+  return selectedDays(prefs)
+    .map((daysBefore) => {
+      const date = new Date(day);
+      date.setDate(date.getDate() - daysBefore);
+      return { daysBefore, date };
+    })
+    .filter((r) => r.date > now);
+}
+// Compatibility helper for callers needing the first upcoming reminder.
 export function reminderDate(
   value: string,
   prefs: Preferences,
   now = new Date(),
 ): Date | null {
-  const day = new Date(value + "T00:00:00");
-  if (!Number.isFinite(day.getTime())) return null;
-  day.setHours(prefs.hour, 0, 0, 0);
-  const before = new Date(day);
-  before.setDate(before.getDate() - prefs.daysBefore);
-  if (before > now) return before;
-  return day > now ? day : null;
+  return reminderDates(value, prefs, now)[0]?.date || null;
 }
 export function weightPoints(entries: Entry[], petId: string) {
   return entries
@@ -88,10 +107,26 @@ export function normalizeStore(data: Partial<Store>): Store {
     entries: data.entries,
     favorites: data.favorites,
     preferences: {
-      reminders: true,
-      daysBefore: 1,
-      hour: 9,
-      ...data.preferences,
+      reminders:
+        typeof data.preferences?.reminders === "boolean"
+          ? data.preferences.reminders
+          : true,
+      daysBefore:
+        data.preferences?.daysBefore != null
+          ? selectedDays(data.preferences)
+          : [1],
+      hour:
+        Number.isInteger(data.preferences?.hour) &&
+        data.preferences!.hour >= 0 &&
+        data.preferences!.hour <= 23
+          ? data.preferences!.hour
+          : 9,
+      minute:
+        Number.isInteger(data.preferences?.minute) &&
+        data.preferences!.minute! >= 0 &&
+        data.preferences!.minute! <= 59
+          ? data.preferences!.minute!
+          : 0,
     },
     checklist: data.checklist || {},
     trash: data.trash || [],

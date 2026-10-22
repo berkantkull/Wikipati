@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   Pressable,
   StyleSheet,
   Switch,
+  TextInput,
+  Keyboard,
   Platform,
   Share,
   Linking,
@@ -12,7 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import type { Entry, Pet, Preferences, Store } from "./data";
 import type { PermissionState } from "./notifications";
-import { weightPoints } from "./care";
+import { weightPoints, selectedDays } from "./care";
 import { green } from "./styles";
 
 export function Action({
@@ -30,6 +32,7 @@ export function Action({
     <Pressable
       accessibilityRole="button"
       disabled={disabled}
+      accessibilityState={{disabled}}
       onPress={onPress}
       style={({ pressed }) => [
         f.action,
@@ -68,13 +71,55 @@ const stages = [
     ],
   },
 ];
-export function AdoptionEntry({ onPress, expanded }: { onPress: () => void; expanded: boolean }) {
+export function AdoptionEntry({
+  onPress,
+  expanded,
+}: {
+  onPress: () => void;
+  expanded: boolean;
+}) {
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={onPress}
-      style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 14, padding: 18, borderRadius: 20, backgroundColor: pressed ? "#E2E9DA" : "#EEF2E8", borderWidth: 1, borderColor: "#DCE5D4" })}>
-      <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: "white", alignItems: "center", justifyContent: "center" }}><Ionicons name="home-outline" size={23} color={green} /></View>
-      <View style={{ flex: 1, gap: 5 }}><Text style={{ color: green, fontSize: 17, fontWeight: "700" }}>Birlikte ilk adımlar</Text><Text style={{ color: "#677260", fontSize: 13, lineHeight: 19 }}>Yeni sahiplendin mi? İlk gün ve ilk hafta için hazırlık listeni keşfet.</Text></View>
-      <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={green} />
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 14,
+        padding: 18,
+        borderRadius: 20,
+        backgroundColor: pressed ? "#E2E9DA" : "#EEF2E8",
+        borderWidth: 1,
+        borderColor: "#DCE5D4",
+      })}
+    >
+      <View
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 14,
+          backgroundColor: "white",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="home-outline" size={23} color={green} />
+      </View>
+      <View style={{ flex: 1, gap: 5 }}>
+        <Text style={{ color: green, fontSize: 17, fontWeight: "700" }}>
+          Birlikte ilk adımlar
+        </Text>
+        <Text style={{ color: "#677260", fontSize: 13, lineHeight: 19 }}>
+          Yeni sahiplendin mi? İlk gün ve ilk hafta için hazırlık listeni
+          keşfet.
+        </Text>
+      </View>
+      <Ionicons
+        name={expanded ? "chevron-up" : "chevron-down"}
+        size={20}
+        color={green}
+      />
     </Pressable>
   );
 }
@@ -93,11 +138,18 @@ export function Adoption({
   return (
     <View style={f.card}>
       <Text style={f.eyebrow}>YENİ SAHİPLENDİM</Text>
-      <Text style={f.title}>{pet ? `${pet.name} ile ilk adımlar` : "Yeni dostuna hazırlan"}</Text>
+      <Text style={f.title}>
+        {pet ? `${pet.name} ile ilk adımlar` : "Yeni dostuna hazırlan"}
+      </Text>
       <Text style={f.muted}>
         Kendi hızınızda ilerleyin. {checked.length}/9 hazırlık tamamlandı.
       </Text>
-      {!pet && <Text style={f.muted}>Profil oluşturmadan başlayabilirsin. İşaretlediğin adımlar bu cihazda saklanır.</Text>}
+      {!pet && (
+        <Text style={f.muted}>
+          Profil oluşturmadan başlayabilirsin. İşaretlediğin adımlar bu cihazda
+          saklanır.
+        </Text>
+      )}
       <View style={f.track}>
         <View
           style={[
@@ -148,7 +200,9 @@ export function Adoption({
           </Text>
         </Pressable>
       ))}
-      {onPlan && stage === 2 && <Action label="Kontrol hatırlatması oluştur →" onPress={onPlan} />}
+      {onPlan && stage === 2 && (
+        <Action label="Kontrol hatırlatması oluştur →" onPress={onPlan} />
+      )}
     </View>
   );
 }
@@ -308,7 +362,21 @@ export function WeightChart({
     </View>
   );
 }
+export function SettingsSection({title, subtitle, icon, children}: {title: string; subtitle: string; icon: React.ComponentProps<typeof Ionicons>["name"]; children: React.ReactNode}) {
+  const [open, setOpen] = useState(false);
+  return <View style={f.card}>
+    <Pressable accessibilityRole="button" accessibilityState={{expanded: open}} onPress={() => setOpen(!open)} style={({pressed}) => [{flexDirection: "row", alignItems: "center", gap: 12, minHeight: 56}, pressed && {opacity: 0.65}]}>
+      <View style={{backgroundColor: "#EDF3EF", padding: 12, borderRadius: 14}}><Ionicons name={icon} size={23} color={green} /></View>
+      <View style={{flex: 1, gap: 4}}><Text style={f.title}>{title}</Text><Text style={f.small}>{subtitle}</Text></View>
+      <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={green}/>
+    </Pressable>
+    {open && <View style={{gap: 14, paddingTop: 12, borderTopWidth: 1, borderColor: "#E3E8DC"}}>{children}</View>}
+  </View>;
+}
+
 export function Settings({
+  account,
+  onOnboarding,
   store,
   permission,
   working,
@@ -317,9 +385,12 @@ export function Settings({
   onSync,
   onPreferences,
   onExport,
+  onImport,
   onRestore,
   onMessage,
 }: {
+  account: React.ReactNode;
+  onOnboarding: () => void;
   store: Store;
   permission: PermissionState;
   working: boolean;
@@ -328,17 +399,48 @@ export function Settings({
   onSync: () => void;
   onPreferences: (p: Preferences) => void;
   onExport: () => void;
+  onImport: () => void;
   onRestore: (id: string) => void;
   onMessage: (s: string) => void;
 }) {
   const prefs = store.preferences;
+  const days = selectedDays(prefs);
+  const [customHour, setCustomHour] = useState(
+    String(prefs.hour).padStart(2, "0"),
+  );
+  const [customMinute, setCustomMinute] = useState(
+    String(prefs.minute || 0).padStart(2, "0"),
+  );
+  const [timeError, setTimeError] = useState("");
+  useEffect(() => {
+    setCustomHour(String(prefs.hour).padStart(2, "0"));
+    setCustomMinute(String(prefs.minute || 0).padStart(2, "0"));
+  }, [prefs.hour, prefs.minute]);
+  function saveTime() {
+    if (
+      !/^\d{1,2}$/.test(customHour) ||
+      !/^\d{1,2}$/.test(customMinute) ||
+      Number(customHour) > 23 ||
+      Number(customMinute) > 59
+    ) {
+      setTimeError("Saat 00–23, dakika 00–59 arasında olmalı.");
+      return;
+    }
+    Keyboard.dismiss();
+    setTimeError("");
+    onPreferences({
+      ...prefs,
+      hour: Number(customHour),
+      minute: Number(customMinute),
+    });
+  }
+
   return (
     <>
       <Text style={f.eyebrow}>WİKİPATİ</Text>
       <Text style={f.heading}>Ayarlar</Text>
       <Text style={f.muted}>Bildirimlerini ve kişisel kayıtlarını yönet.</Text>
-      <Text style={f.groupTitle}>BİLDİRİMLER</Text>
-      <View style={f.card}>
+      <SettingsSection title="Bildirimler" subtitle={permission.allowed ? "İzin verildi · Saat ve gün tercihleri" : "İzin durumu, saat ve gün tercihleri"} icon="notifications-outline">
         <View style={f.row}>
           <Ionicons name="notifications-outline" size={26} color={green} />
           <View style={{ flex: 1 }}>
@@ -391,45 +493,131 @@ export function Settings({
             trackColor={{ true: green }}
           />
         </View>
-        <Text style={f.label}>Ne zaman hatırlatalım?</Text>
+        <Text style={f.label}>Hangi günlerde hatırlatalım?</Text>
+        <Text style={f.small}>
+          Birden fazla gün seçebilirsin. Seçtiğin her gün için ayrı bir bildirim
+          gelir.
+        </Text>
         <View style={f.wrap}>
-          {[0, 1, 3].map((daysBefore) => (
+          {[0, 1, 3].map((day) => (
             <Pressable
-              accessibilityRole="button"
+              accessibilityRole="checkbox"
+              accessibilityState={{
+                checked: days.includes(day),
+                disabled: working,
+              }}
               disabled={working}
-              key={daysBefore}
-              onPress={() => onPreferences({ ...prefs, daysBefore })}
-              style={[f.chip, prefs.daysBefore === daysBefore && f.selected]}
+              key={day}
+              onPress={() =>
+                onPreferences({
+                  ...prefs,
+                  daysBefore: days.includes(day)
+                    ? days.filter((d) => d !== day)
+                    : [...days, day],
+                })
+              }
+              style={[
+                f.chip,
+                { flexDirection: "row", alignItems: "center", gap: 6 },
+                days.includes(day) && f.selected,
+              ]}
             >
-              <Text
-                style={{
-                  color: prefs.daysBefore === daysBefore ? "white" : green,
-                }}
-              >
-                {daysBefore ? `${daysBefore} gün önce` : "Aynı gün"}
+              <Ionicons
+                name={
+                  days.includes(day) ? "checkmark-circle" : "ellipse-outline"
+                }
+                size={18}
+                color={days.includes(day) ? "white" : green}
+              />
+              <Text style={{ color: days.includes(day) ? "white" : green }}>
+                {day ? `${day} gün önce` : "Aynı gün"}
               </Text>
             </Pressable>
           ))}
         </View>
+        {!days.length && (
+          <Text accessibilityRole="alert" style={{ color: "#AF493D" }}>
+            Bildirim almak için en az bir gün seç.
+          </Text>
+        )}
         <Text style={f.label}>Hatırlatma saati</Text>
+        <Text style={f.small}>
+          Seçili tüm günlerde {String(prefs.hour).padStart(2, "0")}:
+          {String(prefs.minute || 0).padStart(2, "0")} · telefonunun yerel saati
+        </Text>
         <View style={f.wrap}>
           {[9, 12, 18].map((hour) => (
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{
+                selected: prefs.hour === hour && !prefs.minute,
+              }}
               disabled={working}
               key={hour}
-              onPress={() => onPreferences({ ...prefs, hour })}
-              style={[f.chip, prefs.hour === hour && f.selected]}
+              onPress={() => {
+                setTimeError("");
+                onPreferences({ ...prefs, hour, minute: 0 });
+              }}
+              style={[
+                f.chip,
+                prefs.hour === hour && !prefs.minute && f.selected,
+              ]}
             >
-              <Text style={{ color: prefs.hour === hour ? "white" : green }}>
+              <Text
+                style={{
+                  color: prefs.hour === hour && !prefs.minute ? "white" : green,
+                }}
+              >
                 {String(hour).padStart(2, "0")}:00
               </Text>
             </Pressable>
           ))}
         </View>
+        <Text style={f.label}>Kendi saatini belirle</Text>
+        <View style={f.row}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={f.small}>Saat (00–23)</Text>
+            <TextInput
+              accessibilityLabel="Hatırlatma saati"
+              editable={!working}
+              value={customHour}
+              onChangeText={(v) => {
+                setCustomHour(v);
+                setTimeError("");
+              }}
+              keyboardType="number-pad"
+              maxLength={2}
+              selectTextOnFocus
+              style={f.timeInput}
+            />
+          </View>
+          <Text style={f.title}>:</Text>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={f.small}>Dakika (00–59)</Text>
+            <TextInput
+              accessibilityLabel="Hatırlatma dakikası"
+              editable={!working}
+              value={customMinute}
+              onChangeText={(v) => {
+                setCustomMinute(v);
+                setTimeError("");
+              }}
+              keyboardType="number-pad"
+              maxLength={2}
+              selectTextOnFocus
+              style={f.timeInput}
+            />
+          </View>
+        </View>
+        {!!timeError && (
+          <Text accessibilityRole="alert" style={{ color: "#AF493D" }}>
+            {timeError}
+          </Text>
+        )}
+        <Action label="Bu saati uygula" disabled={working} onPress={saveTime} />
         <Text style={f.small}>
-          Seçilen erken hatırlatma zamanı geçmişse bakım günü kullanılır.
-          Değişiklikler mevcut planlara da uygulanır.
+          Geçmiş zamanlar atlanır; yalnızca seçtiğin günlerde bildirim
+          planlanır. Değişiklikler mevcut planlara da uygulanır.
         </Text>
         <Action
           label="5 saniye sonra test bildirimi gönder"
@@ -441,9 +629,9 @@ export function Settings({
           disabled={working || Platform.OS === "web"}
           onPress={onSync}
         />
-      </View>
-      <Text style={f.groupTitle}>VERİLER VE GİZLİLİK</Text>
-      <View style={f.card}>
+      </SettingsSection>
+      <SettingsSection title="Kayıtlar ve yedekleme" subtitle="Dışa aktar, geri yükle ve bulut durumu" icon="folder-open-outline">
+        {account}
         <Text style={f.label}>Bu cihazda saklanır</Text>
         <Text style={f.muted}>
           Profil, bakım ve hazırlık listelerin bu cihazda tutulur. Uygulamayı
@@ -454,13 +642,17 @@ export function Settings({
           disabled={working}
           onPress={onExport}
         />
+        <Action
+          label="Yedekten geri yükle ↑"
+          disabled={working}
+          onPress={onImport}
+        />
         <Text style={f.small}>
-          JSON dosyası kayıt bilgilerini içerir. Fotoğraf ve belge dosyaları
-          dahil değildir.
+          JSON dosyası kayıt bilgilerini içerir. Fotoğraf ve belge dosyaları ve
+          çöp kutusu dahil değildir. Geri yüklemeden önce içeriği inceleyebilir ve aynı kayıtlar için hangi sürümün korunacağını seçebilirsin.
         </Text>
-      </View>
-      <Text style={f.groupTitle}>ÇÖP KUTUSU · {store.trash.length}</Text>
-      <View style={f.card}>
+      </SettingsSection>
+      <SettingsSection title="Çöp kutusu" subtitle={`${store.trash.length} silinen öğe · Geri alınabilir`} icon="trash-outline">
         {store.trash.length ? (
           store.trash.map((t) => (
             <View key={t.id} style={f.row}>
@@ -486,21 +678,34 @@ export function Settings({
             Silinen profiller ve kayıtlar burada geri alınabilir.
           </Text>
         )}
-      </View>
-      <Text style={f.groupTitle}>HAKKINDA</Text>
-      <View style={f.card}>
+      </SettingsSection>
+      <SettingsSection title="Kullanım ve gizlilik" subtitle="Verilerin, izinlerin ve Wikipati hakkında" icon="shield-checkmark-outline">
+        <Text style={f.muted}>Konumun yalnızca veteriner araması başlattığında istenir. Yakındaki sonuçlar için harita hizmetine aktarılır. Fotoğraf ve belge erişimi, sen eklemek istediğinde kullanılır.</Text>
+        <Text style={f.muted}>Bilgi kütüphanesi çevrimdışı okunabilir. Harita ve etkinleştirildiğinde bulut işlemleri internet gerektirir. İçerikler bilgilendirme amaçlıdır; tanı ve tedavi yerine geçmez.</Text>
+        <Action label="Başlangıç tercihlerini düzenle" onPress={onOnboarding} />
         <Text style={f.label}>Wikipati · 1.0.0</Text>
         <Text style={f.muted}>
           Patili dostların ansiklopedisi ve kişisel bakım günlüğü.
         </Text>
         <Text style={f.small}>
-          İçerikler güvenilir kaynaklardan derlenir. Kaynak bağlantıları her maddenin içinde gösterilir.
+          İçerikler güvenilir kaynaklardan derlenir. Kaynak bağlantıları her
+          maddenin içinde gösterilir.
         </Text>
-      </View>
+      </SettingsSection>
     </>
   );
 }
 const f = StyleSheet.create({
+  timeInput: {
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: "#CCD9CD",
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 20,
+    color: green,
+    backgroundColor: "#FAFCF8",
+  },
   card: {
     padding: 18,
     borderRadius: 18,

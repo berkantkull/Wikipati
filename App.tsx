@@ -1,3 +1,11 @@
+import { PetDocuments } from "./src/PetDocuments";
+import { LivingArticle } from "./src/LivingArticle";
+import { calendarEntries } from "./src/calendar";
+import { AppErrorBoundary } from "./src/AppErrorBoundary";
+import { CloudAccount } from "./src/CloudAccount";
+import { Onboarding } from "./src/Onboarding";
+import { HealthPassport } from "./src/HealthPassport";
+import { finishCare, dailyCare } from "./src/routines";
 import React, { useEffect, useState, useRef } from "react";
 import {
   View,
@@ -13,6 +21,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   AppState,
+  Keyboard,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -46,9 +55,24 @@ import {
   removeEntry,
   restoreItem,
 } from "./src/care";
-import { Adoption, AdoptionEntry, WeightChart, Settings, Action } from "./src/Features";
+import {
+  Adoption,
+  AdoptionEntry,
+  WeightChart,
+  Settings,
+  SettingsSection,
+  Action,
+} from "./src/Features";
+import { DateField } from "./src/DateField";
+import {
+  backupJSON,
+  parseBackup,
+  mergeBackup,
+  type Backup,
+} from "./src/backup";
 import { s, green } from "./src/styles";
 import { FormCloseHeader } from "./src/FormCloseHeader";
+import { NearbyVets } from "./src/NearbyVets";
 import { WikiHome, WikiReader } from "./src/WikiScreens";
 import { wikiArticles, WikiArticle } from "./src/wiki";
 const articles = wikiArticles;
@@ -77,16 +101,24 @@ function Button({
   title,
   onPress,
   secondary = false,
+  disabled = false,
 }: {
   title: string;
   onPress: () => void;
   secondary?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
+      disabled={disabled}
+      accessibilityState={{ disabled }}
       onPress={onPress}
-      style={[s.button, secondary && s.secondary]}
+      style={({ pressed }) => [
+        s.button,
+        secondary && s.secondary,
+        (pressed || disabled) && { opacity: 0.6 },
+      ]}
     >
       <Text style={[s.buttonText, secondary && { color: green }]}>{title}</Text>
     </Pressable>
@@ -98,37 +130,74 @@ function Field({
   onChange,
   placeholder = "",
   numeric = false,
+  error,
+  multiline = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   numeric?: boolean;
+  error?: string;
+  multiline?: boolean;
 }) {
   return (
     <View style={{ gap: 8 }}>
       <Text style={s.label}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
-        style={s.input}
+        style={[
+          s.input,
+          multiline && { minHeight: 100, textAlignVertical: "top" },
+          error ? { borderColor: "#AF493D" } : {},
+        ]}
+        multiline={multiline}
+        returnKeyType={multiline ? "default" : "done"}
+        onSubmitEditing={multiline ? undefined : Keyboard.dismiss}
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
         placeholderTextColor="#969D96"
         keyboardType={numeric ? "decimal-pad" : "default"}
       />
+      {!!error && (
+        <Text accessibilityRole="alert" style={s.error}>
+          {error}
+        </Text>
+      )}
     </View>
   );
 }
 export default function App() {
+  return <AppErrorBoundary><WikipatiApp /></AppErrorBoundary>;
+}
+function WikipatiApp() {
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const profileContentY = useRef(0);
+  function openProfileSection(section: string) {
+    setProfileSection(section);
+    mainScroll.current?.scrollTo({y: profileContentY.current, animated: true});
+  }
+  const [useBackupVersions, setUseBackupVersions] = useState(false);
+  const [lifeFilter, setLifeFilter] = useState("Tümü");
+  const [repeatDays, setRepeatDays] = useState(0);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [backupPreview, setBackupPreview] = useState<Backup | null>(null);
+  const [profileSection, setProfileSection] = useState("Sağlık karnesi");
+  const [calendarFilter, setCalendarFilter] = useState("Planlı");
+  const [calendarPet, setCalendarPet] = useState("Tümü");
+  const [calendarQuery, setCalendarQuery] = useState("");
+  const [vetsOpen, setVetsOpen] = useState(false);
   const [adoptionOpen, setAdoptionOpen] = useState(false);
   const [store, setStore] = useState<Store>(emptyStore),
     [ready, setReady] = useState(false),
     [failure, setFailure] = useState("");
   const storeRef = useRef<Store>(emptyStore),
     mutation = useRef(false);
-  const loaded = useRef(false), permissionRequest = useRef(false);
-  const mainScroll = useRef<ScrollView>(null), formScroll = useRef<ScrollView>(null);
+  const loaded = useRef(false),
+    permissionRequest = useRef(false);
+  const mainScroll = useRef<ScrollView>(null),
+    formScroll = useRef<ScrollView>(null);
   const [editingPet, setEditingPet] = useState<string | null>(null),
     [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [message, setMessage] = useState(""),
@@ -145,8 +214,8 @@ export default function App() {
   });
   function inform(title: string, detail?: string) {
     setMessage([title, detail].filter(Boolean).join(" · "));
-    mainScroll.current?.scrollTo({y:0,animated:true});
-    formScroll.current?.scrollTo({y:0,animated:true});
+    mainScroll.current?.scrollTo({ y: 0, animated: true });
+    formScroll.current?.scrollTo({ y: 0, animated: true });
   }
   const [tab, setTab] = useState<Tab>("home"),
     [category, setCategory] = useState("Tümü"),
@@ -206,14 +275,18 @@ export default function App() {
         ? null
         : Notifications.addNotificationResponseReceivedListener(() => {
             setTab("calendar");
-            void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+            void Notifications.clearLastNotificationResponseAsync().catch(
+              () => {},
+            );
           });
     if (Platform.OS !== "web")
       Notifications.getLastNotificationResponseAsync()
         .then((r) => {
           if (r && live) {
             setTab("calendar");
-            void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+            void Notifications.clearLastNotificationResponseAsync().catch(
+              () => {},
+            );
           }
         })
         .catch(() => {});
@@ -222,7 +295,7 @@ export default function App() {
       foreground.remove();
       response?.remove();
     };
-  }, []);
+  }, [loadAttempt]);
   async function commit(next: Store, notify = true) {
     if (mutation.current) {
       inform("Bir işlem sürüyor", "Lütfen tamamlanınca tekrar dene.");
@@ -308,11 +381,14 @@ export default function App() {
         : removeEntry(storeRef.current, target.id);
     if (await commit(updated)) {
       setDeleteTarget(null);
+      if (target.type === "pet" && calendarPet === target.id)
+        setCalendarPet("Tümü");
       setLastDeleted(target.type + "-" + target.id);
       inform("Çöp kutusuna taşındı", "Ayarlar bölümünden de geri alabilirsin.");
     }
   }
   function editPet(p: Pet) {
+    setErrors({});
     setEditingPet(p.id);
     setName(p.name);
     setBreed(p.breed);
@@ -324,6 +400,7 @@ export default function App() {
     setForm("pet");
   }
   function editEntry(e: Entry) {
+    setErrors({});
     setEditingEntry(e);
     setSelectedPet(e.petId);
     setTitle(e.title);
@@ -333,6 +410,7 @@ export default function App() {
     setWeight(e.weight ? String(e.weight) : "");
     setAttachment(null);
     setReminder(!e.done);
+    setRepeatDays(e.repeatDays || 0);
     setMessage("");
     setForm("entry");
   }
@@ -340,16 +418,26 @@ export default function App() {
   const upcoming = store.entries
     .filter((e) => !e.done)
     .sort((a, b) => a.date.localeCompare(b.date));
-  const filtered = articles.filter(
-    (a) =>
-      (category === "Tümü" || a.category === category) &&
-      (species === "Tümü" || a.species === species || a.species === "Tümü") &&
-      (!onlyFavorites || store.favorites.includes(a.id)) &&
-      (a.title + " " + a.summary + " " + a.body)
-        .toLocaleLowerCase("tr")
-        .includes(query.toLocaleLowerCase("tr")),
-  );
+  const filtered = articles
+    .filter(
+      (a) =>
+        lifeFilter === "Tümü" ||
+        wikiArticles
+          .find((w) => w.id === a.id)
+          ?.lifeStages.includes(lifeFilter),
+    )
+    .filter(
+      (a) =>
+        (category === "Tümü" || a.category === category) &&
+        (species === "Tümü" || a.species === species || a.species === "Tümü") &&
+        (!onlyFavorites || store.favorites.includes(a.id)) &&
+        (a.title + " " + a.summary + " " + a.body)
+          .toLocaleLowerCase("tr")
+          .includes(query.trim().toLocaleLowerCase("tr")),
+    )
+    .sort((a, b) => a.title.localeCompare(b.title, "tr"));
   function openPet() {
+    setErrors({});
     setEditingPet(null);
     setMessage("");
     setName("");
@@ -361,6 +449,7 @@ export default function App() {
     setForm("pet");
   }
   function openEntry() {
+    setErrors({});
     setEditingEntry(null);
     setMessage("");
     if (!pet) {
@@ -374,16 +463,17 @@ export default function App() {
     setWeight("");
     setAttachment(null);
     setReminder(true);
+    setRepeatDays(0);
     setForm("entry");
   }
   async function durable(uri: string, name: string) {
     if (Platform.OS === "web") {
-      if (uri.startsWith('data:')) return uri;
+      if (uri.startsWith("data:")) return uri;
       const blob = await (await fetch(uri)).blob();
-      return await new Promise<string>((resolve,reject) => {
+      return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(Error('Dosya okunamadı'));
+        reader.onerror = () => reject(Error("Dosya okunamadı"));
         reader.readAsDataURL(blob);
       });
     }
@@ -409,36 +499,34 @@ export default function App() {
   }
   async function save() {
     if (busy || mutation.current) return;
-    if (
-      form === "pet" &&
-      (!name.trim() ||
-        (birthday && (!parseDate(birthday) || birthday > today())))
-    ) {
-      inform(
-        "Bilgileri kontrol et",
-        "İsim gerekli; doğum tarihi YYYY-AA-GG biçiminde ve geçmişte olmalı.",
-      );
+    const nextErrors: Record<string, string> = {};
+    if (form === "pet") {
+      if (!name.trim()) nextErrors.name = "Dostunun adını yaz.";
+      if (birthday && (!parseDate(birthday) || birthday > today()))
+        nextErrors.birthday = "Bugün veya geçmiş bir tarih seç.";
+    } else {
+      if (!title.trim()) nextErrors.title = "Kayıt için kısa bir başlık yaz.";
+      if (!parseDate(date)) nextErrors.date = "Geçerli bir tarih seç.";
+      if (kind === "Kilo") {
+        if (
+          !Number.isFinite(Number(weight.replace(",", "."))) ||
+          Number(weight.replace(",", ".")) <= 0
+        )
+          nextErrors.weight = "Sıfırdan büyük bir kilo gir. Örnek: 4,2";
+        if (date > today()) nextErrors.date = "Ölçüm tarihi gelecekte olamaz.";
+      }
+    }
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length) {
+      formScroll.current?.scrollTo({ y: 0, animated: true });
       return;
     }
-    if (
-      form === "entry" &&
-      (!title.trim() ||
-        !parseDate(date) ||
-        (kind === "Kilo" &&
-          (!Number.isFinite(Number(weight.replace(",", "."))) ||
-            Number(weight.replace(",", ".")) <= 0 ||
-            date > today())))
-    ) {
-      inform(
-        "Bilgileri kontrol et",
-        "Başlık ve geçerli tarih gerekli. Kilo pozitif olmalı ve ileri tarihli olamaz.",
-      );
-      return;
-    }
+    Keyboard.dismiss();
     setBusy(true);
     try {
       if (form === "pet") {
         const p: Pet = {
+          ...storeRef.current.pets.find((p) => p.id === editingPet),
           id: editingPet || uid(),
           name: name.trim(),
           species: petSpecies,
@@ -476,6 +564,7 @@ export default function App() {
           fileName: attachment?.name || editingEntry?.fileName,
           done: !pending,
           notification: editingEntry?.notification,
+          repeatDays: pending && repeatDays ? repeatDays : undefined,
         };
         const next = {
           ...storeRef.current,
@@ -500,12 +589,7 @@ export default function App() {
     }
   }
   async function complete(e: Entry) {
-    await commit({
-      ...storeRef.current,
-      entries: storeRef.current.entries.map((x) =>
-        x.id === e.id ? { ...x, done: true } : x,
-      ),
-    });
+    await commit(finishCare(storeRef.current, e.id, today(), uid()));
   }
   async function postpone(e: Entry) {
     const d = parseDate(e.date)!;
@@ -521,15 +605,53 @@ export default function App() {
     await commit({
       ...storeRef.current,
       entries: storeRef.current.entries.map((x) =>
-        x.id === e.id ? { ...x, date: nextDate } : x,
+        x.id === e.id
+          ? { ...x, date: nextDate, postponedFrom: x.postponedFrom || x.date }
+          : x,
       ),
     });
+  }
+  async function importData() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/json", "text/plain"],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (asset.size && asset.size > 10_000_000)
+        throw Error("Yedek dosyası 10 MB sınırını aşıyor.");
+      const raw =
+        Platform.OS === "web"
+          ? await (await fetch(asset.uri)).text()
+          : await new File(asset.uri).text();
+      setBackupPreview(parseBackup(raw));
+    } catch (e) {
+      inform(e instanceof Error ? e.message : "Yedek okunamadı.");
+    }
+  }
+  useEffect(() => {
+    setUseBackupVersions(false);
+  }, [backupPreview]);
+  async function confirmImport() {
+    if (!backupPreview) return;
+    const current = storeRef.current,
+      next = mergeBackup(current, backupPreview, useBackupVersions);
+    const petCount = next.pets.length - current.pets.length,
+      entryCount = next.entries.length - current.entries.length;
+    if (await commit(next)) {
+      setBackupPreview(null);
+      inform(
+        "Yedek geri yüklendi",
+        `${petCount} profil ve ${entryCount} kayıt eklendi. Mevcut kayıtların korundu.`,
+      );
+    }
   }
   async function exportData() {
     try {
       if (Platform.OS === "web") {
         const url = URL.createObjectURL(
-          new Blob([JSON.stringify(store, null, 2)], {
+          new Blob([backupJSON(store)], {
             type: "application/json",
           }),
         );
@@ -541,7 +663,7 @@ export default function App() {
         return;
       }
       const f = new File(Paths.cache, "wikipati-yedek.json");
-      f.write(JSON.stringify(store, null, 2));
+      f.write(backupJSON(store));
       await Sharing.shareAsync(f.uri, { mimeType: "application/json" });
     } catch {
       inform("Paylaşılamadı", "Bu cihazda paylaşım kullanılamıyor.");
@@ -551,12 +673,11 @@ export default function App() {
     try {
       if (!e.file) return;
       if (Platform.OS === "web") {
-        const a = document.createElement('a');
+        const a = document.createElement("a");
         a.href = e.file;
-        a.download = e.fileName || 'wikipati-belge';
+        a.download = e.fileName || "wikipati-belge";
         a.click();
-      }
-      else await Sharing.shareAsync(e.file);
+      } else await Sharing.shareAsync(e.file);
     } catch {
       inform("Belge açılamadı", "Dosyaya erişilemiyor.");
     }
@@ -571,6 +692,8 @@ export default function App() {
         {items.map((x) => (
           <Pressable
             key={x}
+            accessibilityRole="button"
+            accessibilityState={{ selected: value === x }}
             onPress={() => change(x)}
             style={[s.chip, value === x && s.chipActive]}
           >
@@ -583,19 +706,44 @@ export default function App() {
     );
   }
   function petPicker() {
-    return chips(
-      store.pets.map((p) => p.name + " · " + p.id.slice(-3)),
-      pet?.name + " · " + pet?.id.slice(-3),
-      (v) =>
-        setSelectedPet(
-          store.pets.find((p) => p.name + " · " + p.id.slice(-3) === v)!.id,
-        ),
+    return (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.chips}
+      >
+        {store.pets.map((p) => (
+          <Pressable
+            key={p.id}
+            accessibilityRole="button"
+            accessibilityLabel={`${p.name} profilini seç`}
+            accessibilityState={{ selected: pet?.id === p.id }}
+            onPress={() => setSelectedPet(p.id)}
+            style={[
+              s.chip,
+              { flexDirection: "row", alignItems: "center", gap: 8 },
+              pet?.id === p.id && s.chipActive,
+            ]}
+          >
+            <Icon
+              name="paw-outline"
+              size={17}
+              color={pet?.id === p.id ? "white" : green}
+            />
+            <Text style={[s.chipText, pet?.id === p.id && { color: "white" }]}>
+              {p.name}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
     );
   }
   function articleCard(a: (typeof articles)[number]) {
     return (
       <Pressable
         key={a.id}
+        accessibilityRole="button"
+        accessibilityLabel={`${a.title} maddesini oku`}
         style={s.articleCard}
         onPress={() => openArticle(a)}
       >
@@ -636,21 +784,71 @@ export default function App() {
           <Text style={s.muted}>
             {p?.name} · {pretty(e.date)}
           </Text>
+          <Text
+            style={[
+              s.small,
+              !e.done && e.date < today() && { color: "#AF493D" },
+            ]}
+          >
+            {e.kind} ·{" "}
+            {e.done
+              ? "Kayıtlı"
+              : e.date < today()
+                ? "Tarihi geçti"
+                : e.date === today()
+                  ? "Bugün"
+                  : "Planlandı"}
+          </Text>
+          {!!e.repeatDays && (
+            <Text style={s.small}>
+              Tekrar:{" "}
+              {e.repeatDays === 1 ? "her gün" : e.repeatDays + " günde bir"}
+            </Text>
+          )}
+          {!!e.completedAt && (
+            <Text style={s.small}>Tamamlandı: {pretty(e.completedAt)}</Text>
+          )}
+          {!!e.postponedFrom && (
+            <Text style={s.small}>
+              İlk plan: {pretty(e.postponedFrom)} · ertelendi
+            </Text>
+          )}
           {!!e.notes && <Text style={s.muted}>{e.notes}</Text>}
           {!!e.notificationState && !e.done && (
             <Text style={s.small}>{e.notificationState}</Text>
           )}
           {e.file && (
-            <Pressable onPress={() => showFile(e)}>
+            <Pressable
+              accessibilityRole="button"
+              style={s.inline}
+              onPress={() => showFile(e)}
+            >
               <Text style={s.link}>Belgeyi aç · {e.fileName}</Text>
             </Pressable>
           )}
           {!e.done && (
-            <View style={{ flexDirection: "row", gap: 18, marginTop: 8 }}>
-              <Pressable onPress={() => complete(e)}>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 12,
+                marginTop: 8,
+              }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                style={s.inline}
+                onPress={() => complete(e)}
+              >
                 <Text style={s.link}>✓ Tamamlandı</Text>
               </Pressable>
-              <Pressable onPress={() => postpone(e)}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                style={s.inline}
+                onPress={() => postpone(e)}
+              >
                 <Text style={s.muted}>1 gün ertele</Text>
               </Pressable>
             </View>
@@ -696,7 +894,12 @@ export default function App() {
       <SafeAreaProvider>
         <SafeAreaView style={s.loading}>
           {failure ? (
-            <Text>{failure}</Text>
+            <View style={{gap: 18, alignItems: "center", maxWidth: 360}}>
+              <Icon name="folder-open-outline" size={44} />
+              <Text style={s.sectionTitle}>Kayıtlarına ulaşılamadı</Text>
+              <Text accessibilityRole="alert" style={[s.muted, {textAlign: "center"}]}>{failure}</Text>
+              <Button title="Yeniden dene" onPress={() => { setFailure(""); setLoadAttempt(n => n + 1); }} />
+            </View>
           ) : (
             <ActivityIndicator color={green} />
           )}
@@ -709,7 +912,7 @@ export default function App() {
         <StatusBar style="dark" />
         <View style={s.shell}>
           <View style={s.header}>
-            <Pressable onPress={() => setTab("home")} style={s.brand}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Wikipati ana sayfa" onPress={() => setTab("home")} style={s.brand}>
               <View style={s.logo}>
                 <Icon name="paw" color="#fff" size={21} />
               </View>
@@ -731,6 +934,8 @@ export default function App() {
             ref={mainScroll}
             contentContainerStyle={s.content}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           >
             {!!message && (
               <View accessibilityRole="alert" style={s.note}>
@@ -746,21 +951,16 @@ export default function App() {
                 <Action label="Kapat" onPress={() => setMessage("")} />
               </View>
             )}
+            {!store.onboardingDone && tab === "home" && (
+              <Onboarding
+                store={store}
+                onSave={(next) => commit(next, false)}
+                onAdd={openPet}
+                onPermission={enableNotifications}
+              />
+            )}
             {tab === "home" && (
               <>
-                <AdoptionEntry expanded={adoptionOpen} onPress={() => setAdoptionOpen(!adoptionOpen)} />
-                {adoptionOpen && <Adoption
-                  key={pet?.id || "guest"}
-                  pet={pet}
-                  checked={store.checklist[pet?.id || "__adoption_guest__"] || []}
-                  onToggle={(id) => {
-                    const key = pet?.id || "__adoption_guest__";
-                    const current = storeRef.current;
-                    const checked = current.checklist[key] || [];
-                    void commit({ ...current, checklist: { ...current.checklist, [key]: checked.includes(id) ? checked.filter(x => x !== id) : [...checked, id] } }, false);
-                  }}
-                  onPlan={pet ? () => { openEntry(); setKind("Kontrol"); setTitle("İlk veteriner görüşmesi"); } : undefined}
-                />}
                 <WikiHome
                   onOpen={openArticle}
                   onPets={() => {
@@ -770,7 +970,97 @@ export default function App() {
                   onCalendar={() => setTab("calendar")}
                   petCount={store.pets.length}
                   careCount={upcoming.length}
+                  nextCare={
+                    upcoming[0]
+                      ? `${upcoming[0].date < today() ? "Geciken bakım · " : ""}${store.pets.find((p) => p.id === upcoming[0].petId)?.name || "Dostun"} · ${upcoming[0].title} · ${pretty(upcoming[0].date)}`
+                      : undefined
+                  }
+                  onLibrary={() => setTab("library")}
+                  onAddCare={openEntry}
+                  onVets={() => setVetsOpen(true)}
+                >
+                {pet && (
+                  <View style={s.note}>
+                    <View style={{ flex: 1, gap: 8 }}>
+                      <Text style={s.cardTitle}>{pet.name} için keşfet</Text>
+                      <Text style={s.muted}>
+                        {pet.species} · {pet.lifeStage || "Her yaşam dönemi"}
+                        {pet.birthday
+                          ? ` · Doğum: ${pretty(pet.birthday)}`
+                          : ""}
+                      </Text>
+                      <Action
+                        label="Sana özel bilgiler"
+                        onPress={() => {
+                          setSpecies(pet.species);
+                          setLifeFilter(pet.lifeStage || "Tümü");
+                          setCategory(pet.needs?.[0] || "Tümü");
+                          setTab("library");
+                        }}
+                      />
+                    </View>
+                  </View>
+                )}
+                <View style={{ gap: 12 }}>
+                  <Text style={s.sectionTitle}>Günlük bakım listem</Text>
+                  {dailyCare(store.entries, today()).length ? (
+                    dailyCare(store.entries, today()).map(entryCard)
+                  ) : (
+                    <Text style={s.muted}>
+                      Bugün yapılacak tekrar eden bakımın yok. İleri tarihli rutinlerini takvimde görebilirsin.
+                    </Text>
+                  )}
+                  <Action
+                    label="Tekrar eden bakım ekle"
+                    onPress={() => {
+                      openEntry();
+                      if (pet) {
+                        setKind("Bakım");
+                        setRepeatDays(1);
+                      }
+                    }}
+                  />
+                </View>
+                </WikiHome>
+                <AdoptionEntry
+                  expanded={adoptionOpen}
+                  onPress={() => setAdoptionOpen(!adoptionOpen)}
                 />
+                {adoptionOpen && (
+                  <Adoption
+                    key={pet?.id || "guest"}
+                    pet={pet}
+                    checked={
+                      store.checklist[pet?.id || "__adoption_guest__"] || []
+                    }
+                    onToggle={(id) => {
+                      const key = pet?.id || "__adoption_guest__";
+                      const current = storeRef.current;
+                      const checked = current.checklist[key] || [];
+                      void commit(
+                        {
+                          ...current,
+                          checklist: {
+                            ...current.checklist,
+                            [key]: checked.includes(id)
+                              ? checked.filter((x) => x !== id)
+                              : [...checked, id],
+                          },
+                        },
+                        false,
+                      );
+                    }}
+                    onPlan={
+                      pet
+                        ? () => {
+                            openEntry();
+                            setKind("Kontrol");
+                            setTitle("İlk veteriner görüşmesi");
+                          }
+                        : undefined
+                    }
+                  />
+                )}
               </>
             )}
             {tab === "library" && (
@@ -788,9 +1078,19 @@ export default function App() {
                     onChangeText={setQuery}
                   />
                 </View>
+                <Text style={s.label}>Konu</Text>
                 {chips(categories, category, setCategory)}
+                <Text style={s.label}>Dostunun türü</Text>
                 {chips(["Tümü", "Kedi", "Köpek"], species, setSpecies)}
+                <Text style={s.label}>Yaşam dönemi</Text>
+                {chips(
+                  ["Tümü", "Yavru", "Yetişkin", "İleri yaş"],
+                  lifeFilter,
+                  setLifeFilter,
+                )}
                 <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: onlyFavorites }}
                   onPress={() => setOnlyFavorites(!onlyFavorites)}
                   style={s.inline}
                 >
@@ -812,11 +1112,14 @@ export default function App() {
                   : empty(
                       "search-outline",
                       "Henüz bir sonuç yok",
-                      "Farklı bir kelime veya kategori deneyebilirsin.",
+                      "Farklı bir kelime deneyebilir veya filtreleri sıfırlayabilirsin.",
+                      () => { setQuery(""); setCategory("Tümü"); setSpecies("Tümü"); setLifeFilter("Tümü"); setOnlyFavorites(false); },
+                      "Filtreleri temizle",
                     )}
                 <Text style={s.footnote}>
-                  İçerikler güvenilir kaynaklardan derlenir; kaynak bağlantıları her maddede yer alır.
-                  Bilgilendirme amaçlıdır; tanı ve tedavi yerine geçmez.
+                  İçerikler güvenilir kaynaklardan derlenir; kaynak bağlantıları
+                  her maddede yer alır. Bilgilendirme amaçlıdır; tanı ve tedavi
+                  yerine geçmez.
                 </Text>
               </>
             )}
@@ -828,6 +1131,7 @@ export default function App() {
                     <Text style={s.heading}>Patilerim</Text>
                   </View>
                   <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel="Pati ekle"
                     onPress={openPet}
                     style={s.avatar}
@@ -838,27 +1142,44 @@ export default function App() {
                 {store.pets.length > 0 && petPicker()}
                 {pet ? (
                   <>
-                    <View style={s.profile}>
-                      {pet.photo ? (
-                        <Image
-                          source={{ uri: pet.photo }}
-                          style={s.profilePhoto}
-                        />
-                      ) : (
-                        <View style={s.profilePhoto}>
-                          <Icon name="paw" size={48} />
+                    <View style={[s.profile, { alignItems: "stretch" }]}>
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 16,
+                        }}
+                      >
+                        {pet.photo ? (
+                          <Image
+                            source={{ uri: pet.photo }}
+                            style={s.profilePhoto}
+                          />
+                        ) : (
+                          <View style={s.profilePhoto}>
+                            <Icon name="paw" size={48} />
+                          </View>
+                        )}
+                        <View style={{ flex: 1, gap: 6 }}>
+                          <Text
+                            style={[
+                              s.heading,
+                              { fontSize: 27, lineHeight: 34 },
+                            ]}
+                          >
+                            {pet.name}
+                          </Text>
+                          <Text style={s.muted}>
+                            {pet.species}
+                            {pet.breed ? " · " + pet.breed : ""}
+                          </Text>
+                          {!!pet.birthday && (
+                            <Text style={s.muted}>
+                              Doğum tarihi · {pretty(pet.birthday)}
+                            </Text>
+                          )}
                         </View>
-                      )}
-                      <Text style={s.heading}>{pet.name}</Text>
-                      <Text style={s.muted}>
-                        {pet.species}
-                        {pet.breed ? " · " + pet.breed : ""}
-                      </Text>
-                      {!!pet.birthday && (
-                        <Text style={s.muted}>
-                          Doğum tarihi · {pretty(pet.birthday)}
-                        </Text>
-                      )}
+                      </View>
                       {!!pet.allergies && (
                         <Text style={s.alertText}>
                           Alerjiler / özel notlar: {pet.allergies}
@@ -869,6 +1190,131 @@ export default function App() {
                       title="+ Sağlık veya bakım kaydı ekle"
                       onPress={openEntry}
                     />
+                    <View style={{flexDirection: "row", flexWrap: "wrap", gap: 10}}>
+                      {([
+                        {label: "Sağlık karnesi", detail: "Kayıtları gör ve PDF paylaş", icon: "document-text-outline", action: () => openProfileSection("Sağlık karnesi")},
+                        {label: "Birlikte bakım", detail: "Görüşme notu ve bakım kartı", icon: "people-outline", action: () => openProfileSection("Birlikte bakım")},
+                        {label: "Kilo takibi", detail: "Ölçümleri ve değişimi gör", icon: "analytics-outline", action: () => openProfileSection("Kilo")},
+                      ] as const).map(item => <Pressable key={item.label} accessibilityRole="button" onPress={item.action} style={({pressed}) => [s.quickCard, pressed && {opacity: 0.7}]}>
+                        <Icon name={item.icon} size={24}/><Text style={s.cardTitle}>{item.label}</Text><Text style={s.small}>{item.detail}</Text>
+                      </Pressable>)}
+                    </View>
+                    <View style={s.statRow}>
+                      <View style={s.stat}>
+                        <Text style={s.sectionTitle}>
+                          {
+                            store.entries.filter((e) => e.petId === pet.id)
+                              .length
+                          }
+                        </Text>
+                        <Text style={s.muted}>Bakım kaydı</Text>
+                      </View>
+                      <View style={s.stat}>
+                        <Text style={s.sectionTitle}>
+                          {upcoming.filter((e) => e.petId === pet.id).length}
+                        </Text>
+                        <Text style={s.muted}>Planlı işlem</Text>
+                      </View>
+                    </View>
+                    {!!upcoming.find((e) => e.petId === pet.id) && (
+                      <View style={s.note}>
+                        <Icon name="calendar-outline" />
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={s.label}>
+                            {upcoming.find((e) => e.petId === pet.id)!.date <
+                            today()
+                              ? "Tarihi geçen bakım"
+                              : "Sıradaki bakım"}
+                          </Text>
+                          <Text style={s.muted}>
+                            {upcoming.find((e) => e.petId === pet.id)!.title} ·{" "}
+                            {pretty(
+                              upcoming.find((e) => e.petId === pet.id)!.date,
+                            )}
+                          </Text>
+                        </View>
+                        <Action
+                          label="Aç"
+                          onPress={() => {
+                            setCalendarPet(pet.id);
+                            setCalendarFilter("Planlı");
+                            setTab("calendar");
+                          }}
+                        />
+                      </View>
+                    )}
+                    <View onLayout={e => { profileContentY.current = e.nativeEvent.layout.y; }} />
+                    {chips(
+                      ["Sağlık karnesi", "Birlikte bakım", "Geçmiş", "Kilo", "İlk adımlar"],
+                      profileSection,
+                      setProfileSection,
+                    )}
+                    {profileSection === "Birlikte bakım" && <PetDocuments key={pet.id} pet={pet} entries={store.entries} onSave={async (title,notes) => commit({...storeRef.current, entries:[...storeRef.current.entries,{id:uid(),petId:pet.id,title,notes,date:today(),kind:"Not",done:true}]},false)} onPlan={(notes)=>{openEntry();setKind("Kontrol");setTitle("Veteriner görüşmesi sonrası takip");setNotes(notes);}} />}
+                    {profileSection === "İlk adımlar" && (
+                      <Adoption
+                        pet={pet}
+                        checked={store.checklist[pet.id] || []}
+                        onToggle={(id) => {
+                          const checked =
+                            storeRef.current.checklist[pet.id] || [];
+                          void commit(
+                            {
+                              ...storeRef.current,
+                              checklist: {
+                                ...storeRef.current.checklist,
+                                [pet.id]: checked.includes(id)
+                                  ? checked.filter((x) => x !== id)
+                                  : [...checked, id],
+                              },
+                            },
+                            false,
+                          );
+                        }}
+                        onPlan={() => {
+                          openEntry();
+                          setKind("Kontrol");
+                          setTitle("İlk veteriner görüşmesi");
+                        }}
+                      />
+                    )}
+                    {profileSection === "Sağlık karnesi" && (
+                      <HealthPassport
+                        pet={pet}
+                        entries={store.entries}
+                        onFile={showFile}
+                      />
+                    )}
+                    {profileSection === "Kilo" && (
+                      <WeightChart
+                        pet={pet}
+                        entries={store.entries}
+                        onAdd={() => {
+                          openEntry();
+                          setKind("Kilo");
+                          setTitle("Kilo ölçümü");
+                          setReminder(false);
+                        }}
+                        onMessage={inform}
+                      />
+                    )}
+                    {profileSection === "Geçmiş" && (
+                      <>
+                        <Text style={s.sectionTitle}>
+                          Sağlık ve bakım geçmişi
+                        </Text>
+                        {store.entries
+                          .filter((e) => e.petId === pet.id)
+                          .sort((a, b) => b.date.localeCompare(a.date))
+                          .map(entryCard)}
+                        {!store.entries.some((e) => e.petId === pet.id) &&
+                          empty(
+                            "folder-open-outline",
+                            "İlk kaydına hazır",
+                            "Aşılar, raporlar ve bakım notları burada bir arada.",
+                          )}
+                      </>
+                    )}
+                    <SettingsSection title="Profil yönetimi" subtitle="Bilgileri düzenle veya profili kaldır" icon="options-outline">
                     <View style={{ flexDirection: "row", gap: 8 }}>
                       <Action
                         label="Profili düzenle"
@@ -886,53 +1332,8 @@ export default function App() {
                         }
                       />
                     </View>
-                    <Adoption
-                      pet={pet}
-                      checked={store.checklist[pet.id] || []}
-                      onToggle={(id) => {
-                        const checked =
-                          storeRef.current.checklist[pet.id] || [];
-                        void commit(
-                          {
-                            ...storeRef.current,
-                            checklist: {
-                              ...storeRef.current.checklist,
-                              [pet.id]: checked.includes(id)
-                                ? checked.filter((x) => x !== id)
-                                : [...checked, id],
-                            },
-                          },
-                          false,
-                        );
-                      }}
-                      onPlan={() => {
-                        openEntry();
-                        setKind("Kontrol");
-                        setTitle("İlk veteriner görüşmesi");
-                      }}
-                    />
-                    <WeightChart
-                      pet={pet}
-                      entries={store.entries}
-                      onAdd={() => {
-                        openEntry();
-                        setKind("Kilo");
-                        setTitle("Kilo ölçümü");
-                        setReminder(false);
-                      }}
-                      onMessage={inform}
-                    />
-                    <Text style={s.sectionTitle}>Sağlık ve bakım geçmişi</Text>
-                    {store.entries
-                      .filter((e) => e.petId === pet.id)
-                      .sort((a, b) => b.date.localeCompare(a.date))
-                      .map(entryCard)}
-                    {!store.entries.some((e) => e.petId === pet.id) &&
-                      empty(
-                        "folder-open-outline",
-                        "İlk kaydına hazır",
-                        "Aşılar, raporlar ve bakım notları burada bir arada.",
-                      )}
+
+                    </SettingsSection>
                     <Text style={s.sectionTitle}>{pet.name} için keşfet</Text>
                     {articles
                       .filter((a) => a.species === pet.species)
@@ -958,35 +1359,79 @@ export default function App() {
                   Bir sonraki güzel güne hazırlıklı ol.
                 </Text>
                 <Button title="+ Hatırlatma ekle" onPress={openEntry} />
-                <View style={s.calendarSummary}>
-                  <Icon name="calendar-outline" size={32} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.sectionTitle}>
-                      {upcoming.length} planlı bakım
-                    </Text>
-                    <Text style={s.muted}>
-                      Tarihler veterinerinle birlikte belirlenir.
-                    </Text>
-                  </View>
+                <View style={s.search}>
+                  <Icon name="search-outline" />
+                  <TextInput accessibilityLabel="Bakım kayıtlarında ara" placeholder="Kayıt, pati adı veya not ara" value={calendarQuery} onChangeText={setCalendarQuery} style={{flex: 1, minWidth: 0, color: green, fontSize: 15}} returnKeyType="search" />
+                  {!!calendarQuery && <Pressable accessibilityRole="button" accessibilityLabel="Kayıt aramasını temizle" onPress={() => setCalendarQuery("")} style={{minWidth: 44, minHeight: 44, justifyContent: "center", alignItems: "center"}}><Icon name="close" /></Pressable>}
                 </View>
-                {upcoming.length
-                  ? upcoming.map(entryCard)
-                  : empty(
-                      "checkmark-circle-outline",
-                      "Her şey yolunda",
-                      "Eklediğin bakım hatırlatmaları burada görünecek.",
-                    )}
-                <Text style={s.sectionTitle}>Tamamlananlar</Text>
-                {store.entries
-                  .filter(
-                    (e) => e.done && e.kind !== "Not" && e.kind !== "Kilo",
-                  )
-                  .sort((a, b) => b.date.localeCompare(a.date))
-                  .map(entryCard)}
+                <View style={s.statRow}>
+                  {[{label: "Bugün", filter: "Bugün"}, {label: "Geciken", filter: "Geciken"}, {label: "7 gün", filter: "7 gün"}].map(item => <Pressable key={item.filter} accessibilityRole="button" accessibilityLabel={item.label + " bakım kayıtlarını göster"} accessibilityState={{selected: calendarFilter === item.filter}} onPress={() => {setCalendarFilter(item.filter); setCalendarQuery("");}} style={[s.stat, calendarFilter === item.filter && {borderWidth: 1, borderColor: green}]}>
+                    <Text style={s.sectionTitle}>{calendarEntries(store.entries, store.pets, today(), item.filter, calendarPet).length}</Text>
+                    <Text style={s.muted}>{item.label}</Text>
+                  </Pressable>)}
+                </View>
+                {chips(
+                  ["Planlı", "Bugün", "Geciken", "7 gün", "Geçmiş"],
+                  calendarFilter,
+                  setCalendarFilter,
+                )}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={s.chips}
+                >
+                  {[{ id: "Tümü", name: "Tüm patiler" }, ...store.pets].map(
+                    (p) => (
+                      <Pressable
+                        key={p.id}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: calendarPet === p.id }}
+                        style={[s.chip, calendarPet === p.id && s.chipActive]}
+                        onPress={() => setCalendarPet(p.id)}
+                      >
+                        <Text
+                          style={[
+                            s.chipText,
+                            calendarPet === p.id && { color: "white" },
+                          ]}
+                        >
+                          {p.name}
+                        </Text>
+                      </Pressable>
+                    ),
+                  )}
+                </ScrollView>
+                {(() => {
+                  const list = calendarEntries(store.entries, store.pets, today(), calendarFilter, calendarPet, calendarQuery);
+                  return list.length
+                    ? list.map((e, i) => (
+                        <React.Fragment key={e.id}>
+                          {(!i || list[i - 1].date !== e.date) && (
+                            <Text style={s.eyebrow}>
+                              {pretty(e.date).toLocaleUpperCase("tr-TR")}
+                            </Text>
+                          )}
+                          {entryCard(e)}
+                        </React.Fragment>
+                      ))
+                    : empty(
+                        "calendar-outline",
+                        calendarFilter === "Bugün"
+                          ? "Bugün için plan yok"
+                          : "Burada henüz kayıt yok",
+                        "Aramanı veya seçtiğin pati ve zaman aralığını değiştirebilirsin.",
+                        () => {setCalendarQuery(""); setCalendarPet("Tümü"); setCalendarFilter("Planlı");},
+                        "Tüm planları göster",
+                      );
+                })()}
               </>
             )}
             {tab === "settings" && (
               <Settings
+                account={<CloudAccount store={store} onRestore={setBackupPreview} />}
+                onOnboarding={() => {
+                  void commit({ ...storeRef.current, onboardingDone: false }, false).then((ok) => { if (ok) setTab("home"); });
+                }}
                 store={store}
                 permission={permission}
                 working={busy}
@@ -1009,6 +1454,7 @@ export default function App() {
                   void commit({ ...storeRef.current, preferences });
                 }}
                 onExport={exportData}
+                onImport={importData}
                 onRestore={restore}
                 onMessage={inform}
               />
@@ -1018,7 +1464,7 @@ export default function App() {
           <View style={s.nav}>
             {(
               [
-                { id: "home", icon: "home-outline", label: "Ana sayfa" },
+                { id: "home", icon: "compass-outline", label: "Keşfet" },
                 { id: "library", icon: "book-outline", label: "Kütüphane" },
                 { id: "pets", icon: "paw-outline", label: "Patilerim" },
                 { id: "calendar", icon: "calendar-outline", label: "Takvim" },
@@ -1056,6 +1502,17 @@ export default function App() {
           </View>
         </View>
         <Modal
+          visible={vetsOpen}
+          animationType="slide"
+          onRequestClose={() => setVetsOpen(false)}
+        >
+          <SafeAreaProvider>
+            <SafeAreaView style={s.root}>
+              {vetsOpen && <NearbyVets onClose={() => setVetsOpen(false)} />}
+            </SafeAreaView>
+          </SafeAreaProvider>
+        </Modal>
+        <Modal
           visible={!!article}
           animationType="slide"
           onRequestClose={() => {
@@ -1065,7 +1522,7 @@ export default function App() {
           onDismiss={() => {
             if (plannedArticle) {
               openEntry();
-              if (pet) setTitle(plannedArticle);
+              if (pet) {setTitle(plannedArticle);setKind(plannedArticle.includes("Aşı")?"Aşı":"Bakım");}
               setPlannedArticle(null);
             }
           }}
@@ -1076,6 +1533,8 @@ export default function App() {
                 <WikiReader
                   key={article.id}
                   article={article}
+                  planAvailable={!pet || article.species === "Tümü" || pet.species === article.species}
+                  personalContext={<LivingArticle article={article} pet={pet} pets={store.pets} entries={store.entries} onSelect={setSelectedPet} onRecords={() => {setArticle(null);setArticleHistory([]);setProfileSection(article.category === "Beslenme" ? "Kilo" : "Sağlık karnesi");setTab("pets");}} />}
                   favorite={store.favorites.includes(article.id)}
                   onFavorite={() =>
                     commit({
@@ -1109,7 +1568,7 @@ export default function App() {
                     if (Platform.OS === "ios") setPlannedArticle(topic);
                     else {
                       openEntry();
-                      if (pet) setTitle(topic);
+                      if (pet) {setTitle(topic);setKind(topic.includes("Aşı")?"Aşı":"Bakım");}
                     }
                   }}
                 />
@@ -1132,6 +1591,7 @@ export default function App() {
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
               >
                 <ScrollView
+                  keyboardDismissMode="on-drag"
                   ref={formScroll}
                   contentContainerStyle={s.content}
                   keyboardShouldPersistTaps="handled"
@@ -1157,6 +1617,12 @@ export default function App() {
                   </Text>
                   {form === "pet" ? (
                     <>
+                      {!!photo && (
+                        <Image
+                          source={{ uri: photo }}
+                          style={[s.profilePhoto, { alignSelf: "center" }]}
+                        />
+                      )}
                       <Button
                         title={
                           photo
@@ -1167,9 +1633,13 @@ export default function App() {
                         onPress={pickPhoto}
                       />
                       <Field
+                        error={errors.name}
                         label="İsim *"
                         value={name}
-                        onChange={setName}
+                        onChange={(v) => {
+                          setName(v);
+                          setErrors((e) => ({ ...e, name: "" }));
+                        }}
                         placeholder="Dostunun adı"
                       />
                       {chips(
@@ -1183,13 +1653,16 @@ export default function App() {
                         onChange={setBreed}
                         placeholder="Örn. Tekir"
                       />
-                      <Field
+                      <DateField
+                        pastOnly
+                        optional
+                        error={errors.birthday}
                         label="Doğum tarihi (isteğe bağlı)"
                         value={birthday}
                         onChange={setBirthday}
-                        placeholder="YYYY-AA-GG"
                       />
                       <Field
+                        multiline
                         label="Alerjiler ve özel notlar"
                         value={allergies}
                         onChange={setAllergies}
@@ -1213,26 +1686,73 @@ export default function App() {
                         setKind,
                       )}
                       <Field
+                        error={errors.title}
                         label="Başlık *"
                         value={title}
-                        onChange={setTitle}
+                        onChange={(v) => {
+                          setTitle(v);
+                          setErrors((e) => ({ ...e, title: "" }));
+                        }}
                         placeholder="Örn. Yıllık veteriner kontrolü"
                       />
-                      <Field
+                      <DateField
+                        pastOnly={kind === "Kilo"}
+                        error={errors.date}
                         label="Tarih *"
                         value={date}
-                        onChange={setDate}
-                        placeholder="YYYY-AA-GG"
+                        onChange={(v) => {
+                          setDate(v);
+                          setErrors((e) => ({ ...e, date: "" }));
+                        }}
                       />
+                      {reminder && kind !== "Kilo" && kind !== "Not" && (
+                        <View style={{ gap: 8 }}>
+                          <Text style={s.label}>Tekrar sıklığı</Text>
+                          {chips(
+                            [
+                              "Tek sefer",
+                              "Her gün",
+                              "Her hafta",
+                              "30 günde bir",
+                            ],
+                            repeatDays === 1
+                              ? "Her gün"
+                              : repeatDays === 7
+                                ? "Her hafta"
+                                : repeatDays === 30
+                                  ? "30 günde bir"
+                                  : "Tek sefer",
+                            (x) =>
+                              setRepeatDays(
+                                x === "Her gün"
+                                  ? 1
+                                  : x === "Her hafta"
+                                    ? 7
+                                    : x === "30 günde bir"
+                                      ? 30
+                                      : 0,
+                              ),
+                          )}
+                          <Text style={s.small}>
+                            Tamamlandığında sonraki kayıt oluşur. İlaç sıklığını
+                            veterinerinin planına göre seç.
+                          </Text>
+                        </View>
+                      )}
                       {kind === "Kilo" && (
                         <Field
+                          error={errors.weight}
                           label="Kilo (kg) *"
                           value={weight}
-                          onChange={setWeight}
+                          onChange={(v) => {
+                            setWeight(v);
+                            setErrors((e) => ({ ...e, weight: "" }));
+                          }}
                           numeric
                         />
                       )}
                       <Field
+                        multiline
                         label="Notlar"
                         value={notes}
                         onChange={setNotes}
@@ -1240,6 +1760,8 @@ export default function App() {
                       />
                       {kind !== "Kilo" && kind !== "Not" && (
                         <Pressable
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: reminder }}
                           style={s.note}
                           onPress={() => setReminder(!reminder)}
                         >
@@ -1278,14 +1800,88 @@ export default function App() {
                       />
                     </>
                   )}
+                </ScrollView>
+                <View
+                  style={{
+                    paddingHorizontal: 22,
+                    paddingVertical: 12,
+                    borderTopWidth: 1,
+                    borderColor: "#DEE7DF",
+                    backgroundColor: "#F7F9F5",
+                  }}
+                >
                   <Button
+                    disabled={busy}
                     title={busy ? "Kaydediliyor…" : "Kaydet"}
                     onPress={save}
                   />
-                </ScrollView>
+                </View>
               </KeyboardAvoidingView>
             </SafeAreaView>
           </SafeAreaProvider>
+        </Modal>
+        <Modal
+          visible={!!backupPreview}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            if (!busy) setBackupPreview(null);
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "#102C27AA",
+              justifyContent: "center",
+              padding: 24,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: "#fff",
+                borderRadius: 24,
+                padding: 24,
+                gap: 18,
+                maxWidth: 500,
+                width: "100%",
+                alignSelf: "center",
+              }}
+            >
+              <Text style={s.sectionTitle}>Yedeği geri yükle</Text>
+              <Text style={s.muted}>
+                {backupPreview?.pets.length} profil ve{" "}
+                {backupPreview?.entries.length} kayıt bulundu. Eksik kayıtlar
+                eklenir. Aynı kaydın iki farklı sürümü varsa hangisi
+                kullanılsın? Çöp kutusu ve bildirim ayarların korunur.
+              </Text>
+              {chips(
+                ["Bu cihazdaki sürüm", "Yedekteki sürüm"],
+                useBackupVersions ? "Yedekteki sürüm" : "Bu cihazdaki sürüm",
+                (x) => setUseBackupVersions(x === "Yedekteki sürüm"),
+              )}
+              {useBackupVersions && (
+                <Text style={s.error}>
+                  Aynı kimlikli profil ve kayıtların metin bilgileri yedekteki
+                  sürümle değiştirilecek.
+                </Text>
+              )}
+              <Text style={s.muted}>
+                Fotoğraflar ve belgeler bu yedeğe dahil değildir. Yeni planlı
+                kayıtlar mevcut bildirim tercihlerine göre planlanır.
+              </Text>
+              <Button
+                disabled={busy}
+                title={busy ? "Ekleniyor…" : "Kayıtları birleştir"}
+                onPress={confirmImport}
+              />
+              <Button
+                disabled={busy}
+                secondary
+                title="Vazgeç"
+                onPress={() => setBackupPreview(null)}
+              />
+            </View>
+          </View>
         </Modal>
         <Modal
           visible={!!deleteTarget}

@@ -53,7 +53,7 @@ test("restoring an entry requires its parent and does not duplicate records", ()
   s = restoreItem(s, "entry-e1");
   assert.equal(restoreItem(s, "entry-e1").entries.length, 1);
 });
-test("reminders fall back to appointment day, never schedule a past time", () => {
+test("reminders schedule only selected future days", () => {
   const prefs = { reminders: true, daysBefore: 3, hour: 18 };
   assert.equal(
     reminderDate(
@@ -66,7 +66,7 @@ test("reminders fall back to appointment day, never schedule a past time", () =>
   assert.equal(
     reminderDate(
       "2026-10-10",
-      prefs,
+      {...prefs,daysBefore:[0,3]},
       new Date("2026-10-09T00:00:00"),
     ).getDate(),
     10,

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
-import { reminderDate, normalizeStore } from "../src/care.ts";
+import { reminderDates, selectedDays, normalizeStore } from "../src/care.ts";
 function harness({ granted = true, canAskAgain = true, fail = false } = {}) {
   const scheduled = new Map(),
     calls = [];
@@ -56,7 +56,7 @@ function harness({ granted = true, canAskAgain = true, fail = false } = {}) {
         : name === "expo-notifications"
           ? api
           : name === "./care"
-            ? { reminderDate }
+            ? { reminderDates, selectedDays }
             : null,
   };
   vm.runInNewContext(code, context);
@@ -117,5 +117,28 @@ test("denial, disable and native failure never report successful scheduling", as
   assert.equal(h.scheduled.size, 0);
   h = harness({ fail: true });
   s = await h.api.syncNotifications(store());
-  assert.match(s.entries[0].notificationState, /Planlanamadı/);
+  assert.match(s.entries[0].notificationState, /yeniden dene/);
+});
+
+test("multiple days schedule independently, custom minutes persist and deselection cancels", async () => {
+  const h = harness();
+  let s = store();
+  s.preferences = {
+    reminders: true,
+    daysBefore: [0, 1, 3],
+    hour: 14,
+    minute: 35,
+  };
+  s = await h.api.syncNotifications(s);
+  assert.equal(h.scheduled.size, 3);
+  for (const item of h.scheduled.values()) {
+    assert.equal(item.trigger.date.getHours(), 14);
+    assert.equal(item.trigger.date.getMinutes(), 35);
+  }
+  s.preferences.daysBefore = [0];
+  s = await h.api.syncNotifications(s);
+  assert.equal(h.scheduled.size, 1);
+  s.preferences.daysBefore = [];
+  await h.api.syncNotifications(s);
+  assert.equal(h.scheduled.size, 0);
 });

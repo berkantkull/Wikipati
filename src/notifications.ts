@@ -1,7 +1,7 @@
 import { Platform, Linking } from "react-native";
 import * as Notifications from "expo-notifications";
 import type { Store } from "./data";
-import { reminderDate } from "./care";
+import { reminderDates, selectedDays } from "./care";
 
 if (Platform.OS !== "web")
   Notifications.setNotificationHandler({
@@ -101,18 +101,21 @@ export async function syncNotifications(store: Store): Promise<Store> {
       .map((e) => e.notification)
       .filter(Boolean),
   );
-  const active = new Set(
-    pending
-      .filter(
-        (e) =>
-          store.preferences.reminders &&
-          p.allowed &&
-          reminderDate(e.date, store.preferences),
-      )
-      .slice(0, 60)
-      .map((e) => "wikipati-care-" + e.id),
-  );
-  for (const n of scheduled)
+  const plans =
+    store.preferences.reminders && p.allowed
+      ? pending
+          .flatMap((e) =>
+            reminderDates(e.date, store.preferences).map((r) => ({
+              ...r,
+              entry: e,
+              id: `wikipati-care-${e.id}-d${r.daysBefore}`,
+            })),
+          )
+          .sort((a, b) => a.date.getTime() - b.date.getTime())
+          .slice(0, 60)
+      : [];
+  const active = new Set(plans.map((p) => p.id));
+  for (const n of scheduled) {
     if (
       ((n.identifier.startsWith("wikipati-care-") ||
         legacy.has(n.identifier)) &&
@@ -120,47 +123,58 @@ export async function syncNotifications(store: Store): Promise<Store> {
       (n.identifier === "wikipati-test" && !store.preferences.reminders)
     )
       await Notifications.cancelScheduledNotificationAsync(n.identifier);
-  const entries = [];
-  for (const e of store.entries) {
-    const date = reminderDate(e.date, store.preferences);
-    let notificationState = e.done
+  }
+  const outcomes = new Map<string, { id: string; date: Date; ok: boolean }[]>();
+  for (const plan of plans) {
+    let ok = false;
+    try {
+      await Notifications.cancelScheduledNotificationAsync(plan.id);
+      const pet = store.pets.find((p) => p.id === plan.entry.petId);
+      await Notifications.scheduleNotificationAsync({
+        identifier: plan.id,
+        content: {
+          title: "Wikipati • Bakım hatırlatması",
+          body: `${pet?.name || "Patin"}: ${plan.entry.title} · ${plan.daysBefore ? plan.daysBefore + " gün sonra" : "Bugün"}`,
+          sound: "default",
+          data: {
+            screen: "calendar",
+            petId: plan.entry.petId,
+            entryId: plan.entry.id,
+          },
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: plan.date,
+          channelId: "care",
+        },
+      });
+      ok = true;
+    } catch {}
+    outcomes.set(plan.entry.id, [
+      ...(outcomes.get(plan.entry.id) || []),
+      { id: plan.id, date: plan.date, ok },
+    ]);
+  }
+  const entries = store.entries.map((e) => {
+    const eligible = reminderDates(e.date, store.preferences),
+      results = outcomes.get(e.id) || [],
+      success = results.filter((r) => r.ok);
+    const state = e.done
       ? undefined
       : !store.preferences.reminders
         ? "Hatırlatmalar ayarlardan kapalı"
-        : !p.allowed
-          ? "Bildirim izni gerekli"
-          : !date
-            ? "Hatırlatma zamanı geçmiş"
-            : !active.has("wikipati-care-" + e.id)
-              ? "İlk 60 hatırlatmadan sonra planlanacak"
-              : undefined;
-    let notification: string | undefined;
-    if (!e.done && !notificationState && date) {
-      try {
-        const pet = store.pets.find((pet) => pet.id === e.petId);
-        await Notifications.cancelScheduledNotificationAsync(
-          "wikipati-care-" + e.id,
-        );
-        notification = await Notifications.scheduleNotificationAsync({
-          identifier: "wikipati-care-" + e.id,
-          content: {
-            title: "Wikipati • Bakım zamanı",
-            body: `${pet?.name || "Patin"}: ${e.title}`,
-            sound: "default",
-            data: { screen: "calendar", petId: e.petId, entryId: e.id },
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DATE,
-            date,
-            channelId: "care",
-          },
-        });
-        notificationState = "Planlandı · " + date.toLocaleString("tr-TR");
-      } catch {
-        notificationState = "Planlanamadı · Ayarlardan yeniden dene";
-      }
-    }
-    entries.push({ ...e, notification, notificationState });
-  }
+        : !selectedDays(store.preferences).length
+          ? "Hatırlatma günü seçilmedi"
+          : !p.allowed
+            ? "Bildirim izni gerekli"
+            : !eligible.length
+              ? "Seçili hatırlatma zamanları geçmiş"
+              : results.some((r) => !r.ok)
+                ? `${success.length}/${eligible.length} planlandı · Ayarlardan yeniden dene`
+                : !results.length
+                  ? "İlk 60 bildirimden sonra planlanacak"
+                  : `${success.length} hatırlatma planlandı · ${success.map((r) => r.date.toLocaleString("tr-TR")).join(" / ")}${results.length < eligible.length ? " · Kalanlar ilk 60 bildirimden sonra planlanacak" : ""}`;
+    return { ...e, notification: success[0]?.id, notificationState: state };
+  });
   return { ...store, entries };
 }

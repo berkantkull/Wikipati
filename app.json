@@ -33,7 +33,14 @@
           "microphonePermission": false,
           "cameraPermission": false
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Wikipati, yakındaki veteriner kliniklerini bulmak için konumunu kullanır."
+        }
+      ],
+      "expo-secure-store"
     ]
   }
 }
