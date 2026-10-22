@@ -491,6 +491,13 @@ function WikipatiApp({
   const upcoming = store.entries
     .filter((e) => !e.done)
     .sort((a, b) => a.date.localeCompare(b.date));
+  const tomorrowDate = (() => {
+    const value = parseDate(today())!;
+    value.setDate(value.getDate() + 1);
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  })();
+  const todayAndTomorrow = upcoming.filter((entry) => entry.date === today() || entry.date === tomorrowDate);
+  const sevenDays = calendarEntries(store.entries, store.pets, today(), "7 gün");
   const backupDue =
     (store.pets.length > 0 || store.entries.length > 0) &&
     (!store.backupReminderSnoozedUntil ||
@@ -1109,6 +1116,17 @@ function WikipatiApp({
                 onPermission={enableNotifications}
               />
             )}
+            {tab === "home" && store.pets.length > 0 && (
+              <View style={s.note}>
+                <Text accessibilityRole="header" style={s.sectionTitle}>Bugün</Text>
+                {store.pets.length > 1 && petPicker()}
+                {todayAndTomorrow.length ? todayAndTomorrow.map((entry) => {
+                  const owner = store.pets.find((item) => item.id === entry.petId);
+                  return <View key={entry.id} style={{ gap: 6 }}><Text style={s.cardTitle}>{owner?.name} · {entry.title}</Text><Text style={s.small}>{entry.date === today() ? "Bugün" : "Yarın"}</Text><Action label="Yapıldı" onPress={() => void complete(entry)} /></View>;
+                }) : <Text style={s.muted}>Bugün veya yarın için planlanmış bir bakım yok.</Text>}
+                <Text style={s.small}>Önümüzdeki 7 gün: {sevenDays.length} önemli tarih</Text>
+              </View>
+            )}
             {tab === "home" && backupDue && (
               <View style={s.note}>
                 <View style={{ flex: 1, gap: 8 }}>
@@ -1188,6 +1206,14 @@ function WikipatiApp({
                   />
                 </View>
                 </WikiHome>
+                <View style={{ gap: 12 }}>
+                  <Text accessibilityRole="header" style={s.sectionTitle}>Araçlar</Text>
+                  {[
+                    ["Yaş ve yaşam dönemi", "Patinin yaşına göre kaynaklı yaşam dönemi aralığı", "/araclar/yas-hesaplayici"],
+                    ["Acil belirtiler", "Veteriner bulma ve güvenli yönlendirme", "/araclar/acil-belirtiler"],
+                    ["Zehirli mi?", "Kaynaklı madde arama altyapısı", "/araclar/zehirli-mi"],
+                  ].map(([label, description, path]) => <Pressable key={path} accessibilityRole="button" accessibilityLabel={`${label} aracını aç`} onPress={() => router.push(path as never)} style={s.articleCard}><View style={{ flex: 1, gap: 6 }}><Text style={s.cardTitle}>{label}</Text><Text style={s.muted}>{description}</Text></View><Icon name="chevron-forward" /></Pressable>)}
+                </View>
                 <AdoptionEntry
                   expanded={adoptionOpen}
                   onPress={() => setAdoptionOpen(!adoptionOpen)}
@@ -1644,6 +1670,15 @@ function WikipatiApp({
                   onPress={() => void Linking.openSettings().catch(() => inform("Telefon ayarları açılamadı"))}
                 />
                 {Platform.OS === "web" && <Text style={s.small}>İzinler mobil uygulamada yönetilir.</Text>}
+              </SettingsSection>
+              <SettingsSection title="Hakkında ve yasal" subtitle="Gizlilik, koşullar ve tıbbi uyarı" icon="information-circle-outline">
+                {[
+                  ["Gizlilik Politikası", "/yasal/gizlilik"],
+                  ["KVKK Aydınlatma Metni", "/yasal/kvkk"],
+                  ["Kullanım Koşulları", "/yasal/kullanim-kosullari"],
+                  ["Tıbbi Uyarı", "/yasal/tibbi-uyari"],
+                  ["Hakkımızda / İletişim", "/yasal/hakkimizda"],
+                ].map(([label, path]) => <Action key={path} label={label} onPress={() => router.push(path as never)} />)}
               </SettingsSection>
               </>
             )}

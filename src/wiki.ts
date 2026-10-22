@@ -1,4 +1,4 @@
-import { articles } from "./data";
+import { articles } from "./data.ts";
 
 // Keep identifiers stable: existing saved favorites continue to point to these entries.
 const metadata: Record<
@@ -48,6 +48,9 @@ const fallbackSlugs: Record<string, string> = {
   "9": "agiz-dis-bakimi",
   "10": "gunluk-degisiklikler",
 };
+const slugById = Object.fromEntries(
+  articles.map((article) => [article.id, metadata[article.id]?.slug || fallbackSlugs[article.id]]),
+);
 export const wikiArticles = articles.map((a) => ({
   ...a,
   title: metadata[a.id]?.title || a.title,
@@ -58,8 +61,25 @@ export const wikiArticles = articles.map((a) => ({
     text,
   })),
   related: metadata[a.id]?.related || ["1", "4", "6"],
+  relatedSlugs: (metadata[a.id]?.related || ["1", "4", "6"]).map((id) => slugById[id]),
   updated: "18 Ekim 2026",
+  updatedAt: "2026-10-18",
+  reviewedBy: undefined as { name: string; title: string } | undefined,
+  sources: [
+    {
+      title: a.source.includes("cat-owners") ? "Routine Health Care of Cats" : "Routine Health Care of Dogs",
+      url: a.source,
+      publisher: "Merck Veterinary Manual",
+    },
+  ],
+  readingMinutes: a.minutes,
   lifeStages:
+    a.id === "7"
+      ? ["Yavru"]
+      : a.id === "8"
+        ? ["İleri yaş"]
+        : ["Yavru", "Yetişkin", "İleri yaş"],
+  lifeStage:
     a.id === "7"
       ? ["Yavru"]
       : a.id === "8"

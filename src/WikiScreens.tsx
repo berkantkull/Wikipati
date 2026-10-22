@@ -5,12 +5,14 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { categories } from "./data";
 import { findArticles, WikiArticle, wikiArticles, glossary } from "./wiki";
 import { green, s } from "./styles";
@@ -416,6 +418,17 @@ export function WikiReader({
   const related = article.related
     .map((id) => wikiArticles.find((a) => a.id === id)!)
     .filter(Boolean);
+  async function shareArticle() {
+    const url = Platform.OS === "web"
+      ? `https://berkantkull.github.io/Wikipati/rehber/${article.slug}`
+      : `wikipati://rehber/${article.slug}`;
+    if (Platform.OS === "web" && globalThis.navigator?.clipboard) {
+      await globalThis.navigator.clipboard.writeText(url);
+      Alert.alert("Bağlantı kopyalandı", "Rehber bağlantısını arkadaşlarınla paylaşabilirsin.");
+      return;
+    }
+    await Share.share({ message: `${article.title}\n${url}` });
+  }
   return (
     <View style={{ flex: 1 }}>
       <View style={w.readerHeader}>
@@ -442,6 +455,8 @@ export function WikiReader({
           {article.title}
         </Text>
         <Text style={w.lead}>{article.summary}</Text>
+        <Text style={w.meta}>Son güncelleme: {new Date(`${article.updatedAt}T12:00:00`).toLocaleDateString("tr-TR")}</Text>
+        {article.reviewedBy && <Text style={w.meta}>Veteriner hekim tarafından incelendi: {article.reviewedBy.name}, {article.reviewedBy.title}</Text>}
         <View style={w.tools}>
           <Action
             icon={favorite ? "bookmark" : "bookmark-outline"}
@@ -458,6 +473,7 @@ export function WikiReader({
             label="Kaynakça"
             onPress={() => jump("sources")}
           />
+          <Action icon="share-outline" label="Paylaş" onPress={() => void shareArticle()} />
         </View>
         {personalContext}
         <View style={w.feature}>
@@ -612,24 +628,19 @@ export function WikiReader({
           <Text accessibilityRole="header" style={w.sectionTitle}>
             Kaynakça
           </Text>
-          <Text style={w.description}>
-            [1] Merck Veterinary Manual ·{" "}
-            {article.source.includes("cat-owners")
-              ? "Routine Health Care of Cats"
-              : "Routine Health Care of Dogs"}
-          </Text>
-          <Action
-            icon="open-outline"
-            label="Orijinal kaynağı aç"
-            onPress={() => {
-              setSourceError("");
-              Linking.openURL(article.source).catch(() =>
-                setSourceError(
-                  "Kaynak açılamadı. İnternet bağlantını kontrol edip tekrar dene.",
-                ),
-              );
-            }}
-          />
+          {article.sources.map((source, index) => (
+            <View key={source.url} style={{ gap: 8 }}>
+              <Text style={w.description}>[{index + 1}] {source.publisher} · {source.title}</Text>
+              <Action
+                icon="open-outline"
+                label={`${index + 1}. kaynağı aç`}
+                onPress={() => {
+                  setSourceError("");
+                  Linking.openURL(source.url).catch(() => setSourceError("Kaynak açılamadı. İnternet bağlantını kontrol edip tekrar dene."));
+                }}
+              />
+            </View>
+          ))}
           {!!sourceError && (
             <Text accessibilityRole="alert" style={{ color: "#AF493D" }}>
               {sourceError}
@@ -637,8 +648,8 @@ export function WikiReader({
           )}
           <Text style={w.disclosure}>
             Bu madde, kaynakçada belirtilen güvenilir yayından derlenen kısa bir
-            Türkçe özettir. Bilgilendirme amaçlıdır; tanı ve tedavi yerine
-            geçmez.
+            Türkçe özettir. Bilgilendirme amaçlıdır; tanı ve tedavi yerine geçmez. {" "}
+            <Text accessibilityRole="link" onPress={() => router.push("/yasal/tibbi-uyari" as never)} style={w.link}>Tıbbi Uyarı</Text>
           </Text>
         </View>
         <Action
