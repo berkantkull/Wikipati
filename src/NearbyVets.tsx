@@ -129,7 +129,7 @@ export function NearbyVets({ onClose }: { onClose: () => void }) {
               İhtiyacı olan bakım, hemen yakınında.
             </Text>
             <Text style={s.muted}>
-              Klinikleri keşfet, iletişime geç ve yol tarifi al.
+              Yakındaki klinikleri bul, iletişim bilgilerini gör ve yol tarifi al.
             </Text>
           </View>
           <Pressable

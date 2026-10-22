@@ -111,8 +111,8 @@ export function AdoptionEntry({
           Birlikte ilk adımlar
         </Text>
         <Text style={{ color: "#677260", fontSize: 13, lineHeight: 19 }}>
-          Yeni sahiplendin mi? İlk gün ve ilk hafta için hazırlık listeni
-          keşfet.
+          Yeni mi sahiplendin? İlk gün ve ilk hafta için hazırlık listesine
+          göz at.
         </Text>
       </View>
       <Ionicons
@@ -142,7 +142,7 @@ export function Adoption({
         {pet ? `${pet.name} ile ilk adımlar` : "Yeni dostuna hazırlan"}
       </Text>
       <Text style={f.muted}>
-        Kendi hızınızda ilerleyin. {checked.length}/9 hazırlık tamamlandı.
+        Adım adım ilerle. {checked.length}/9 adım tamamlandı.
       </Text>
       {!pet && (
         <Text style={f.muted}>
@@ -630,11 +630,11 @@ export function Settings({
           onPress={onSync}
         />
       </SettingsSection>
-      <SettingsSection title="Kayıtlar ve yedekleme" subtitle="Dışa aktar, geri yükle ve bulut durumu" icon="folder-open-outline">
+      <SettingsSection title="Kayıtlar ve yedekleme" subtitle="Kayıtlarını yedekle ve geri yükle" icon="folder-open-outline">
         {account}
         <Text style={f.label}>Bu cihazda saklanır</Text>
         <Text style={f.muted}>
-          Profil, bakım ve hazırlık listelerin bu cihazda tutulur. Uygulamayı
+          Profillerin, bakım kayıtların ve hazırlık listelerin bu cihazda saklanır. Uygulamayı
           kaldırmak verilerini silebilir.
         </Text>
         <Action

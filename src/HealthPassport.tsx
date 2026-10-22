@@ -63,7 +63,7 @@ export function HealthPassport({
         </Text>
       </View>
       <Action
-        label={busy ? "PDF hazırlanıyor…" : "Sağlık karnesini PDF paylaş"}
+        label={busy ? "PDF hazırlanıyor…" : "Sağlık karnesini PDF olarak paylaş"}
         disabled={busy}
         onPress={share}
       />
@@ -85,7 +85,7 @@ export function HealthPassport({
       </View>
       {!rows.length && (
         <Text style={s.muted}>
-          Bu bölümde kayıt yok. Yeni kayıt ekleyerek karneni oluşturmaya başla.
+          Bu bölümde kayıt yok. Yeni kayıt ekleyerek dostunun sağlık karnesini oluşturmaya başla.
         </Text>
       )}
       {rows.map((e) => (

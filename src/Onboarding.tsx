@@ -49,8 +49,8 @@ export function Onboarding({
       </Text>
       <Text style={s.muted}>
         {pet
-          ? "Yaşam dönemini ve ilgilendiğin konuları seç. Önerilerini buna göre hazırlayalım."
-          : "Adı, türü ve bildiğin doğum tarihi yeterli. Eksikleri sonra tamamlayabilirsin."}
+          ? "Yaşam dönemini ve ilgilendiğin konuları seç. Sana uygun içerikleri gösterelim."
+          : "Adını ve türünü gir. Doğum tarihini biliyorsan ekle; diğer bilgileri sonra tamamlayabilirsin."}
       </Text>
       {!pet ? (
         <Action label="İlk patimi ekle" onPress={onAdd} />

@@ -317,7 +317,7 @@ export function WikiHome({
           </View>
           {!results.length && (
             <Text style={w.description}>
-              Bu konuda henüz madde yok. Başka bir sözcük deneyebilirsin.
+              Aramana uygun bir içerik bulunamadı. Başka bir sözcük deneyebilirsin.
             </Text>
           )}
         </>
@@ -469,7 +469,7 @@ export function WikiReader({
             icon={hasPet ? "calendar-outline" : "paw-outline"}
             label={hasPet ? "Bakım takvimime ekle" : "Pati profili oluştur"}
             onPress={onPlan}
-          /> : <Text style={s.muted}>Plan oluşturmak için yukarıdan bu türle eşleşen bir pati seç.</Text>}
+          /> : <Text style={s.muted}>Plan oluşturmak için yukarıdaki pati profillerinden birini seç.</Text>}
         </View>
         <View style={w.infobox}>
           <Pressable

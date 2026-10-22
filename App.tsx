@@ -1356,7 +1356,7 @@ function WikipatiApp() {
                 <Text style={s.eyebrow}>KÜÇÜK HATIRLATMALAR, BÜYÜK ÖZEN</Text>
                 <Text style={s.heading}>Bakım takvimim</Text>
                 <Text style={s.subtitle}>
-                  Bir sonraki güzel güne hazırlıklı ol.
+                  Yaklaşan aşıları, kontrolleri ve bakım planlarını takip et.
                 </Text>
                 <Button title="+ Hatırlatma ekle" onPress={openEntry} />
                 <View style={s.search}>
