@@ -10,7 +10,7 @@ import { Platform, Text, useWindowDimensions, View } from "react-native";
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [fontsLoaded, fontError] = useFonts(Ionicons.font);
   const [storageReady, setStorageReady] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
@@ -73,7 +73,7 @@ export default function RootLayout() {
       <Stack.Screen name="pati/[id]/takvim" />
     </Stack>
   );
-  if (Platform.OS !== "web" || width < 768) return navigation;
+  if (Platform.OS !== "web" || width < 900) return navigation;
   return (
     <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 56, padding: 32, backgroundColor: "#E8EFE7" }}>
       <View style={{ width: 300, gap: 18 }}>
@@ -82,7 +82,7 @@ export default function RootLayout() {
         <Text style={{ color: "#596758", fontSize: 18, lineHeight: 28 }}>Patili dostunun bakım rehberi, sağlık günlüğü ve küçük hatırlatıcısı.</Text>
         <Text style={{ color: "#596758", fontSize: 13, lineHeight: 20 }}>Bu bir mobil uygulama demosudur — bildirimler yalnızca telefonda çalışır.</Text>
       </View>
-      <View style={{ width: 430, maxHeight: 900, flex: 1, overflow: "hidden", borderRadius: 34, backgroundColor: "#F7F9F5", shadowColor: "#102C27", shadowOpacity: 0.22, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 12 }}>
+      <View style={{ width: 430, height: Math.max(320, Math.min(900, height - 64)), flexShrink: 0, overflow: "hidden", borderRadius: 34, backgroundColor: "#F7F9F5", shadowColor: "#102C27", shadowOpacity: 0.22, shadowRadius: 28, shadowOffset: { width: 0, height: 14 }, elevation: 12 }}>
         {navigation}
       </View>
     </View>
