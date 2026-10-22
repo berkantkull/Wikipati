@@ -62,6 +62,7 @@ export function Onboarding({
                 key={x}
                 onPress={() => setStage(x)}
                 accessibilityRole="button"
+                accessibilityLabel={`${x} yaşam dönemini seç`}
                 accessibilityState={{ selected: stage === x }}
                 style={[s.chip, stage === x && s.chipActive]}
               >
@@ -76,6 +77,7 @@ export function Onboarding({
               <Pressable
                 key={x}
                 accessibilityRole="checkbox"
+                accessibilityLabel={`${x} konusunu seç`}
                 accessibilityState={{ checked: needs.includes(x) }}
                 onPress={() =>
                   setNeeds(

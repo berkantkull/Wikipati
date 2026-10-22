@@ -17,6 +17,18 @@ export type PermissionState = {
   canAskAgain: boolean;
   label: string;
 };
+function possessive(name: string) {
+  const lower = name.toLocaleLowerCase("tr-TR");
+  const lastVowel = [...lower].reverse().find((letter) => "aeıioöuü".includes(letter)) || "i";
+  const suffix = "aı".includes(lastVowel)
+    ? "ın"
+    : "ei".includes(lastVowel)
+      ? "in"
+      : "ou".includes(lastVowel)
+        ? "un"
+        : "ün";
+  return `${name}'${"aeıioöuü".includes(lower.at(-1) || "") ? "n" : ""}${suffix}`;
+}
 export async function permissionState(): Promise<PermissionState> {
   if (Platform.OS === "web")
     return {
@@ -133,13 +145,14 @@ export async function syncNotifications(store: Store): Promise<Store> {
       await Notifications.scheduleNotificationAsync({
         identifier: plan.id,
         content: {
-          title: "Wikipati • Bakım hatırlatması",
-          body: `${pet?.name || "Patin"}: ${plan.entry.title} · ${plan.daysBefore ? plan.daysBefore + " gün sonra" : "Bugün"}`,
+          title: `${pet?.name || "Patin"} • Wikipati`,
+          body: `${possessive(pet?.name || "Patin")} ${plan.entry.title} ${plan.daysBefore === 1 ? "yarın" : plan.daysBefore ? plan.daysBefore + " gün sonra" : "bugün"}`,
           sound: "default",
           data: {
             screen: "calendar",
             petId: plan.entry.petId,
             entryId: plan.entry.id,
+            targetRoute: `/pati/${plan.entry.petId}/takvim`,
           },
         },
         trigger: {

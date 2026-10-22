@@ -31,6 +31,7 @@ export function Action({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       disabled={disabled}
       accessibilityState={{disabled}}
       onPress={onPress}
@@ -81,6 +82,7 @@ export function AdoptionEntry({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={expanded ? "Yeni pati hazırlık listesini kapat" : "Yeni pati hazırlık listesini aç"}
       accessibilityState={{ expanded }}
       onPress={onPress}
       style={({ pressed }) => ({
@@ -162,6 +164,7 @@ export function Adoption({
         {stages.map((x, i) => (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={`${x.title} hazırlık aşamasını seç`}
             key={x.title}
             onPress={() => setStage(i)}
             style={[f.chip, stage === i && f.selected]}
@@ -178,6 +181,7 @@ export function Adoption({
         <Pressable
           key={id}
           accessibilityRole="checkbox"
+          accessibilityLabel={text}
           accessibilityState={{ checked: checked.includes(id) }}
           onPress={() => onToggle(id)}
           style={f.check}
@@ -268,6 +272,7 @@ export function WeightChart({
         {["Tümü", "30 gün", "90 gün"].map((p) => (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={`${p} kilo kayıtlarını göster`}
             key={p}
             onPress={() => setPeriod(p)}
             style={[f.chip, period === p && f.selected]}
@@ -365,7 +370,7 @@ export function WeightChart({
 export function SettingsSection({title, subtitle, icon, children}: {title: string; subtitle: string; icon: React.ComponentProps<typeof Ionicons>["name"]; children: React.ReactNode}) {
   const [open, setOpen] = useState(false);
   return <View style={f.card}>
-    <Pressable accessibilityRole="button" accessibilityState={{expanded: open}} onPress={() => setOpen(!open)} style={({pressed}) => [{flexDirection: "row", alignItems: "center", gap: 12, minHeight: 56}, pressed && {opacity: 0.65}]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${title} bölümünü ${open ? "kapat" : "aç"}`} accessibilityState={{expanded: open}} onPress={() => setOpen(!open)} style={({pressed}) => [{flexDirection: "row", alignItems: "center", gap: 12, minHeight: 56}, pressed && {opacity: 0.65}]}>
       <View style={{backgroundColor: "#EDF3EF", padding: 12, borderRadius: 14}}><Ionicons name={icon} size={23} color={green} /></View>
       <View style={{flex: 1, gap: 4}}><Text style={f.title}>{title}</Text><Text style={f.small}>{subtitle}</Text></View>
       <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={green}/>
@@ -502,6 +507,7 @@ export function Settings({
           {[0, 1, 3].map((day) => (
             <Pressable
               accessibilityRole="checkbox"
+              accessibilityLabel={day ? `${day} gün önce hatırlat` : "Aynı gün hatırlat"}
               accessibilityState={{
                 checked: days.includes(day),
                 disabled: working,
@@ -549,6 +555,7 @@ export function Settings({
           {[9, 12, 18].map((hour) => (
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={`${String(hour).padStart(2, "0")}:00 hatırlatma saatini seç`}
               accessibilityState={{
                 selected: prefs.hour === hour && !prefs.minute,
               }}
@@ -722,8 +729,8 @@ const f = StyleSheet.create({
   },
   title: { fontSize: 19, fontWeight: "600", color: green },
   heading: { fontSize: 34, fontWeight: "600", color: green },
-  muted: { fontSize: 14, lineHeight: 22, color: "#6D7968" },
-  small: { fontSize: 12, lineHeight: 19, color: "#7A8574" },
+  muted: { fontSize: 14, lineHeight: 22, color: "#596758" },
+  small: { fontSize: 12, lineHeight: 19, color: "#596758" },
   big: { fontSize: 30, fontWeight: "600", color: green },
   action: {
     minHeight: 48,

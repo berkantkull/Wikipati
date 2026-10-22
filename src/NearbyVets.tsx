@@ -15,11 +15,13 @@ import { VetMapResults } from "./VetMapResults";
 import { vetMapsUrl } from "./vetMaps";
 import { Action } from "./Features";
 import { s, green } from "./styles";
+import { PermissionPrompt } from "./PermissionPrompt";
 export function NearbyVets({ onClose }: { onClose: () => void }) {
   const [url, setUrl] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [blocked, setBlocked] = useState(false),
+    [permissionPrompt, setPermissionPrompt] = useState(false),
     [area, setArea] = useState("");
   const operation = useRef(0),
     running = useRef(false);
@@ -38,7 +40,7 @@ export function NearbyVets({ onClose }: { onClose: () => void }) {
     const id = ++operation.current;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const permission = await Location.requestForegroundPermissionsAsync();
+      const permission = await Location.getForegroundPermissionsAsync();
       if (id !== operation.current) return;
       if (!permission.granted) {
         setBlocked(!permission.canAskAgain);
@@ -76,6 +78,30 @@ export function NearbyVets({ onClose }: { onClose: () => void }) {
         running.current = false;
         setBusy(false);
       }
+    }
+  }
+  async function beginLocate() {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission.granted) {
+      await locate();
+      return;
+    }
+    setBlocked(!permission.canAskAgain);
+    setPermissionPrompt(true);
+  }
+  async function confirmLocationPermission() {
+    if (blocked && Platform.OS !== "web") {
+      await Linking.openSettings();
+      setPermissionPrompt(false);
+      return;
+    }
+    const permission = await Location.requestForegroundPermissionsAsync();
+    if (permission.granted) {
+      setPermissionPrompt(false);
+      await locate();
+    } else {
+      setBlocked(!permission.canAskAgain);
+      setPermissionPrompt(true);
     }
   }
   return (
@@ -134,8 +160,9 @@ export function NearbyVets({ onClose }: { onClose: () => void }) {
           </View>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Konumumla veterinerleri bul"
             disabled={busy}
-            onPress={locate}
+            onPress={() => void beginLocate()}
             style={({ pressed }) => ({
               backgroundColor: green,
               borderRadius: 16,
@@ -209,6 +236,14 @@ export function NearbyVets({ onClose }: { onClose: () => void }) {
           </Text>
         </ScrollView>
       )}
+      <PermissionPrompt
+        visible={permissionPrompt}
+        title="Yakınındaki veterinerleri bul"
+        body="Wikipati konumunu yalnızca yakındaki klinikleri aramak için kullanır; konumunu cihazda saklamaz. İstersen semt veya ilçe yazarak da arayabilirsin."
+        blocked={blocked}
+        onAllow={() => void confirmLocationPermission()}
+        onLater={() => setPermissionPrompt(false)}
+      />
     </View>
   );
 }

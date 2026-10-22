@@ -30,6 +30,7 @@ import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import {
@@ -49,7 +50,6 @@ import {
   testNotification,
   PermissionState,
 } from "./src/notifications";
-import * as Notifications from "expo-notifications";
 import {
   normalizeStore,
   removePet,
@@ -76,6 +76,7 @@ import { FormCloseHeader } from "./src/FormCloseHeader";
 import { NearbyVets } from "./src/NearbyVets";
 import { WikiHome, WikiReader } from "./src/WikiScreens";
 import { wikiArticles, WikiArticle } from "./src/wiki";
+import { PermissionPrompt } from "./src/PermissionPrompt";
 const articles = wikiArticles;
 export type AppTab = "home" | "library" | "pets" | "calendar" | "settings";
 type AppScreenProps = {
@@ -119,6 +120,7 @@ function Button({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={title}
       disabled={disabled}
       accessibilityState={{ disabled }}
       onPress={onPress}
@@ -229,6 +231,12 @@ function WikipatiApp({
     canAskAgain: true,
     label: "Kontrol ediliyor",
   });
+  const [permissionPrompt, setPermissionPrompt] = useState<{
+    kind: "notifications" | "photos";
+    blocked: boolean;
+  } | null>(null);
+  const [locationPermissionLabel, setLocationPermissionLabel] = useState("Kontrol edilmedi");
+  const [photoPermissionLabel, setPhotoPermissionLabel] = useState("Kontrol edilmedi");
   function inform(title: string, detail?: string) {
     setMessage([title, detail].filter(Boolean).join(" · "));
     mainScroll.current?.scrollTo({ y: 0, animated: true });
@@ -320,30 +328,9 @@ function WikipatiApp({
     const foreground = AppState.addEventListener("change", (state) => {
       if (state === "active") void refreshNotifications();
     });
-    const response =
-      Platform.OS === "web"
-        ? null
-        : Notifications.addNotificationResponseReceivedListener(() => {
-            setTab("calendar");
-            void Notifications.clearLastNotificationResponseAsync().catch(
-              () => {},
-            );
-          });
-    if (Platform.OS !== "web")
-      Notifications.getLastNotificationResponseAsync()
-        .then((r) => {
-          if (r && live) {
-            setTab("calendar");
-            void Notifications.clearLastNotificationResponseAsync().catch(
-              () => {},
-            );
-          }
-        })
-        .catch(() => {});
     return () => {
       live = false;
       foreground.remove();
-      response?.remove();
     };
   }, [loadAttempt]);
   async function commit(next: Store, notify = true) {
@@ -392,7 +379,41 @@ function WikipatiApp({
       });
     }
   }
+  useEffect(() => {
+    if (tab !== "settings") return;
+    if (Platform.OS === "web") {
+      setLocationPermissionLabel("Telefon uygulamasında kullanılabilir");
+      setPhotoPermissionLabel("Telefon uygulamasında kullanılabilir");
+      return;
+    }
+    void Promise.all([
+      Location.getForegroundPermissionsAsync(),
+      ImagePicker.getMediaLibraryPermissionsAsync(),
+    ]).then(([location, photos]) => {
+      const label = (granted: boolean, canAskAgain: boolean) =>
+        granted ? "İzin verildi" : canAskAgain ? "Henüz istenmedi" : "Telefon ayarlarından izin verilmeli";
+      setLocationPermissionLabel(label(location.granted, location.canAskAgain));
+      setPhotoPermissionLabel(label(photos.granted, photos.canAskAgain));
+    }).catch(() => {});
+  }, [tab]);
   async function enableNotifications() {
+    if (Platform.OS === "web") {
+      inform("Bu özellik mobil uygulamada çalışır");
+      return;
+    }
+    const current = await permissionState();
+    if (current.allowed) {
+      setPermission(current);
+      return;
+    }
+    setPermissionPrompt({ kind: "notifications", blocked: !current.canAskAgain });
+  }
+  async function confirmNotificationPermission() {
+    if (permissionPrompt?.blocked) {
+      await Linking.openSettings();
+      setPermissionPrompt(null);
+      return;
+    }
     if (mutation.current || permissionRequest.current) return;
     permissionRequest.current = true;
     setBusy(true);
@@ -410,6 +431,7 @@ function WikipatiApp({
     } finally {
       permissionRequest.current = false;
       setBusy(false);
+      setPermissionPrompt(null);
     }
   }
   async function restore(id: string) {
@@ -534,7 +556,7 @@ function WikipatiApp({
     new File(uri).copy(target);
     return target.uri;
   }
-  async function pickPhoto() {
+  async function openPhotoPicker() {
     try {
       const r = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
@@ -545,6 +567,32 @@ function WikipatiApp({
       if (!r.canceled) setPhoto(await durable(r.assets[0].uri, "pet.jpg"));
     } catch {
       inform("Fotoğraf açılamadı", "Galeri erişimini kontrol edin.");
+    }
+  }
+  async function pickPhoto() {
+    if (Platform.OS === "web") {
+      await openPhotoPicker();
+      return;
+    }
+    const current = await ImagePicker.getMediaLibraryPermissionsAsync();
+    if (current.granted) {
+      await openPhotoPicker();
+      return;
+    }
+    setPermissionPrompt({ kind: "photos", blocked: !current.canAskAgain });
+  }
+  async function confirmPhotoPermission() {
+    if (permissionPrompt?.blocked) {
+      await Linking.openSettings();
+      setPermissionPrompt(null);
+      return;
+    }
+    const result = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (result.granted) {
+      setPermissionPrompt(null);
+      await openPhotoPicker();
+    } else {
+      setPermissionPrompt({ kind: "photos", blocked: !result.canAskAgain });
     }
   }
   async function save() {
@@ -627,6 +675,13 @@ function WikipatiApp({
         if (await commit(next)) {
           setForm(null);
           setTab(pending ? "calendar" : "pets");
+          if (pending && Platform.OS !== "web" && !permission.allowed) {
+            const current = await permissionState();
+            setPermissionPrompt({
+              kind: "notifications",
+              blocked: !current.canAskAgain,
+            });
+          }
         }
       }
     } catch {
@@ -871,6 +926,7 @@ function WikipatiApp({
           {e.file && (
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel={`${e.fileName || "Belge"} dosyasını aç`}
               style={s.inline}
               onPress={() => showFile(e)}
             >
@@ -888,14 +944,16 @@ function WikipatiApp({
             >
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={`${e.title} kaydını yapıldı olarak işaretle`}
                 disabled={busy}
                 style={s.inline}
                 onPress={() => complete(e)}
               >
-                <Text style={s.link}>✓ Tamamlandı</Text>
+                <Text style={s.link}>✓ Yapıldı</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={`${e.title} kaydını bir gün ertele`}
                 disabled={busy}
                 style={s.inline}
                 onPress={() => postpone(e)}
@@ -1141,6 +1199,7 @@ function WikipatiApp({
                 )}
                 <Pressable
                   accessibilityRole="checkbox"
+                  accessibilityLabel="Yalnızca favori rehberleri göster"
                   accessibilityState={{ checked: onlyFavorites }}
                   onPress={() => setOnlyFavorites(!onlyFavorites)}
                   style={s.inline}
@@ -1246,7 +1305,7 @@ function WikipatiApp({
                         {label: "Sağlık karnesi", detail: "Kayıtları gör ve PDF paylaş", icon: "document-text-outline", action: () => openProfileSection("Sağlık karnesi")},
                         {label: "Birlikte bakım", detail: "Görüşme notu ve bakım kartı", icon: "people-outline", action: () => openProfileSection("Birlikte bakım")},
                         {label: "Kilo takibi", detail: "Ölçümleri ve değişimi gör", icon: "analytics-outline", action: () => openProfileSection("Kilo")},
-                      ] as const).map(item => <Pressable key={item.label} accessibilityRole="button" onPress={item.action} style={({pressed}) => [s.quickCard, pressed && {opacity: 0.7}]}>
+                      ] as const).map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityLabel={item.label} onPress={item.action} style={({pressed}) => [s.quickCard, pressed && {opacity: 0.7}]}>
                         <Icon name={item.icon} size={24}/><Text style={s.cardTitle}>{item.label}</Text><Text style={s.small}>{item.detail}</Text>
                       </Pressable>)}
                     </View>
@@ -1436,6 +1495,7 @@ function WikipatiApp({
                       <Pressable
                         key={p.id}
                         accessibilityRole="button"
+                        accessibilityLabel={`${p.name} için takvimi göster`}
                         accessibilityState={{ selected: calendarPet === p.id }}
                         style={[s.chip, calendarPet === p.id && s.chipActive]}
                         onPress={() => setCalendarPet(p.id)}
@@ -1478,6 +1538,7 @@ function WikipatiApp({
               </>
             )}
             {tab === "settings" && (
+              <>
               <Settings
                 account={<CloudAccount store={store} onRestore={setBackupPreview} />}
                 onOnboarding={() => {
@@ -1509,6 +1570,25 @@ function WikipatiApp({
                 onRestore={restore}
                 onMessage={inform}
               />
+              <SettingsSection title="İzinler" subtitle="Bildirim, konum ve galeri erişimini yönet" icon="key-outline">
+                {[
+                  ["Bildirimler", permission.label],
+                  ["Konum", locationPermissionLabel],
+                  ["Fotoğraflar", photoPermissionLabel],
+                ].map(([label, status]) => (
+                  <View key={label} style={{ gap: 6 }}>
+                    <Text style={s.cardTitle}>{label}</Text>
+                    <Text style={s.muted}>{status}</Text>
+                  </View>
+                ))}
+                <Action
+                  label="Telefon izin ayarlarını aç"
+                  disabled={Platform.OS === "web"}
+                  onPress={() => void Linking.openSettings().catch(() => inform("Telefon ayarları açılamadı"))}
+                />
+                {Platform.OS === "web" && <Text style={s.small}>İzinler mobil uygulamada yönetilir.</Text>}
+              </SettingsSection>
+              </>
             )}
             <Text style={s.footer}>Birlikte, her pati için daha iyi. ♡</Text>
           </ScrollView>
@@ -1564,6 +1644,17 @@ function WikipatiApp({
             </SafeAreaView>
           </SafeAreaProvider>
         </Modal>
+        <PermissionPrompt
+          visible={!!permissionPrompt}
+          title={permissionPrompt?.kind === "photos" ? "Dostunun fotoğrafını seç" : "Bakım zamanı geldiğinde hatırlayalım"}
+          body={permissionPrompt?.kind === "photos" ? "Wikipati yalnızca sen seçtiğinde galeriye erişir ve fotoğrafı pati profilinde saklar." : "Wikipati, kaydettiğin aşı ve bakım zamanları için telefonuna yerel bildirim göndermek istiyor."}
+          blocked={!!permissionPrompt?.blocked}
+          onAllow={() => {
+            if (permissionPrompt?.kind === "photos") void confirmPhotoPermission();
+            else void confirmNotificationPermission();
+          }}
+          onLater={() => setPermissionPrompt(null)}
+        />
         <Modal
           visible={!!article}
           animationType="slide"
@@ -1825,6 +1916,7 @@ function WikipatiApp({
                       {kind !== "Kilo" && kind !== "Not" && (
                         <Pressable
                           accessibilityRole="checkbox"
+                          accessibilityLabel="Bu bakım için bildirimle hatırlat"
                           accessibilityState={{ checked: reminder }}
                           style={s.note}
                           onPress={() => setReminder(!reminder)}

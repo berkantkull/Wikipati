@@ -134,6 +134,8 @@ test("multiple days schedule independently, custom minutes persist and deselecti
   for (const item of h.scheduled.values()) {
     assert.equal(item.trigger.date.getHours(), 14);
     assert.equal(item.trigger.date.getMinutes(), 35);
+    assert.equal(item.content.data.targetRoute, "/pati/p/takvim");
+    assert.match(item.content.title, /Pamuk/);
   }
   s.preferences.daysBefore = [0];
   s = await h.api.syncNotifications(s);

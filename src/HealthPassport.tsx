@@ -73,6 +73,7 @@ export function HealthPassport({
           <Pressable
             key={x}
             accessibilityRole="button"
+            accessibilityLabel={`${x} sağlık kayıtlarını göster`}
             accessibilityState={{ selected: filter === x }}
             onPress={() => setFilter(x)}
             style={[s.chip, filter === x && s.chipActive]}

@@ -29,6 +29,7 @@ function Action({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       onPress={onPress}
       style={({ pressed }) => [
         w.action,
@@ -240,6 +241,7 @@ export function WikiHome({
         {["Tümü", "Kedi", "Köpek"].map((item) => (
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel={`${item === "Tümü" ? "Tüm türler" : item} rehberlerini göster`}
             accessibilityState={{ selected: species === item }}
             key={item}
             onPress={() => setSpecies(item)}
@@ -267,6 +269,7 @@ export function WikiHome({
               <Pressable
                 key={topic.title}
                 accessibilityRole="button"
+                accessibilityLabel={`${topic.title} rehberlerini göster`}
                 accessibilityState={{ selected: category === topic.title }}
                 onPress={() =>
                   setCategory(category === topic.title ? "Tümü" : topic.title)
@@ -474,6 +477,7 @@ export function WikiReader({
         <View style={w.infobox}>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Rehber ayrıntılarını aç veya kapat"
             accessibilityState={{ expanded: details }}
             onPress={() => setDetails(!details)}
             style={{
@@ -566,6 +570,7 @@ export function WikiReader({
             {index === 0 && related[0] && (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={`${related[0].title} maddesini oku`}
                 onPress={() => onOpen(related[0])}
                 style={w.seeAlso}
               >

@@ -190,6 +190,7 @@ export function DateField({
           >
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Bugünün tarihini seç"
               onPress={() => {
                 onChange(today());
                 setOpen(false);
@@ -201,6 +202,7 @@ export function DateField({
             {optional && (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Seçili tarihi kaldır"
                 onPress={() => {
                   onChange("");
                   setOpen(false);

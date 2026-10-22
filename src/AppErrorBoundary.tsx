@@ -12,7 +12,7 @@ export class AppErrorBoundary extends React.Component<React.PropsWithChildren, {
       <Ionicons name="refresh-circle-outline" size={48} color={green} />
       <Text accessibilityRole="header" style={s.sectionTitle}>Bir sorun oluştu</Text>
       <Text style={[s.muted, { textAlign: "center", maxWidth: 340 }]}>Ekran yüklenemedi. Yeniden deneyebilirsin; bu işlem cihazındaki kayıtları silmez.</Text>
-      <Pressable accessibilityRole="button" onPress={() => this.setState({ failed: false })} style={s.button}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Uygulamayı yeniden dene" onPress={() => this.setState({ failed: false })} style={s.button}>
         <Text style={s.buttonText}>Yeniden dene</Text>
       </Pressable>
     </View>;
