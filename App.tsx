@@ -26,6 +26,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -76,7 +77,14 @@ import { NearbyVets } from "./src/NearbyVets";
 import { WikiHome, WikiReader } from "./src/WikiScreens";
 import { wikiArticles, WikiArticle } from "./src/wiki";
 const articles = wikiArticles;
-type Tab = "home" | "library" | "pets" | "calendar" | "settings";
+export type AppTab = "home" | "library" | "pets" | "calendar" | "settings";
+type AppScreenProps = {
+  initialTab?: AppTab;
+  initialArticleSlug?: string;
+  initialPetId?: string;
+  routerManaged?: boolean;
+  libraryFilters?: { konu?: string; tur?: string; donem?: string };
+};
 const uid = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const KEY = "wikipati.v1";
@@ -171,7 +179,16 @@ function Field({
 export default function App() {
   return <AppErrorBoundary><WikipatiApp /></AppErrorBoundary>;
 }
-function WikipatiApp() {
+export function WikipatiAppScreen(props: AppScreenProps) {
+  return <AppErrorBoundary><WikipatiApp {...props} routerManaged /></AppErrorBoundary>;
+}
+function WikipatiApp({
+  initialTab = "home",
+  initialArticleSlug,
+  initialPetId,
+  routerManaged = false,
+  libraryFilters,
+}: AppScreenProps = {}) {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const profileContentY = useRef(0);
   function openProfileSection(section: string) {
@@ -179,7 +196,7 @@ function WikipatiApp() {
     mainScroll.current?.scrollTo({y: profileContentY.current, animated: true});
   }
   const [useBackupVersions, setUseBackupVersions] = useState(false);
-  const [lifeFilter, setLifeFilter] = useState("Tümü");
+  const [lifeFilter, setLifeFilter] = useState(libraryFilters?.donem || "Tümü");
   const [repeatDays, setRepeatDays] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [backupPreview, setBackupPreview] = useState<Backup | null>(null);
@@ -217,21 +234,50 @@ function WikipatiApp() {
     mainScroll.current?.scrollTo({ y: 0, animated: true });
     formScroll.current?.scrollTo({ y: 0, animated: true });
   }
-  const [tab, setTab] = useState<Tab>("home"),
-    [category, setCategory] = useState("Tümü"),
+  const [tab, setTabState] = useState<AppTab>(initialTab),
+    [category, setCategory] = useState(libraryFilters?.konu || "Tümü"),
     [query, setQuery] = useState(""),
-    [species, setSpecies] = useState("Tümü"),
+    [species, setSpecies] = useState(libraryFilters?.tur || "Tümü"),
     [onlyFavorites, setOnlyFavorites] = useState(false);
   const [selectedPet, setSelectedPet] = useState(""),
-    [article, setArticle] = useState<WikiArticle | null>(null),
+    [article, setArticle] = useState<WikiArticle | null>(() =>
+      initialArticleSlug
+        ? wikiArticles.find((item) => item.slug === initialArticleSlug) || null
+        : null,
+    ),
     [form, setForm] = useState<"pet" | "entry" | null>(null),
     [busy, setBusy] = useState(false);
   const [articleHistory, setArticleHistory] = useState<WikiArticle[]>([]);
   const [plannedArticle, setPlannedArticle] = useState<string | null>(null);
-  function openArticle(a: (typeof articles)[number]) {
+  function openArticle(a: (typeof wikiArticles)[number]) {
+    if (routerManaged) {
+      router.push(`/rehber/${a.slug}`);
+      return;
+    }
     setArticleHistory([]);
     setArticle(wikiArticles.find((x) => x.id === a.id)!);
   }
+  function setTab(next: AppTab) {
+    setTabState(next);
+    if (!routerManaged) return;
+    const paths: Record<AppTab, string> = {
+      home: "/",
+      library: "/kutuphane",
+      pets: "/patilerim",
+      calendar: "/takvim",
+      settings: "/ayarlar",
+    };
+    router.push(paths[next] as never);
+  }
+  useEffect(() => setTabState(initialTab), [initialTab]);
+  useEffect(() => {
+    if (!routerManaged || tab !== "library") return;
+    router.setParams({
+      konu: category === "Tümü" ? undefined : category,
+      tur: species === "Tümü" ? undefined : species,
+      donem: lifeFilter === "Tümü" ? undefined : lifeFilter,
+    } as never);
+  }, [category, species, lifeFilter, routerManaged, tab]);
   const [name, setName] = useState(""),
     [petSpecies, setPetSpecies] = useState("Kedi"),
     [breed, setBreed] = useState(""),
@@ -257,7 +303,11 @@ function WikipatiApp() {
         loaded.current = true;
         if (live) {
           setStore(data);
-          setSelectedPet(data.pets[0]?.id || "");
+          setSelectedPet(
+            (initialPetId && data.pets.some((item) => item.id === initialPetId)
+              ? initialPetId
+              : data.pets[0]?.id) || "",
+          );
           setReady(true);
         }
         await refreshNotifications();
@@ -693,6 +743,7 @@ function WikipatiApp() {
           <Pressable
             key={x}
             accessibilityRole="button"
+            accessibilityLabel={`${x} filtresini seç`}
             accessibilityState={{ selected: value === x }}
             onPress={() => change(x)}
             style={[s.chip, value === x && s.chipActive]}
@@ -1461,7 +1512,7 @@ function WikipatiApp() {
             )}
             <Text style={s.footer}>Birlikte, her pati için daha iyi. ♡</Text>
           </ScrollView>
-          <View style={s.nav}>
+          {!routerManaged && <View style={s.nav}>
             {(
               [
                 { id: "home", icon: "compass-outline", label: "Keşfet" },
@@ -1473,6 +1524,7 @@ function WikipatiApp() {
             ).map((t) => (
               <Pressable
                 accessibilityRole="tab"
+                accessibilityLabel={`${t.label} sekmesi`}
                 accessibilityState={{ selected: tab === t.id }}
                 key={t.id}
                 onPress={() => setTab(t.id)}
@@ -1499,7 +1551,7 @@ function WikipatiApp() {
                 </Text>
               </Pressable>
             ))}
-          </View>
+          </View>}
         </View>
         <Modal
           visible={vetsOpen}
@@ -1516,6 +1568,10 @@ function WikipatiApp() {
           visible={!!article}
           animationType="slide"
           onRequestClose={() => {
+            if (routerManaged && initialArticleSlug) {
+              router.back();
+              return;
+            }
             setArticle(null);
             setArticleHistory([]);
           }}
@@ -1545,6 +1601,10 @@ function WikipatiApp() {
                     })
                   }
                   onOpen={(a) => {
+                    if (routerManaged) {
+                      router.push(`/rehber/${a.slug}`);
+                      return;
+                    }
                     setArticleHistory([...articleHistory, article]);
                     setArticle(a);
                   }}
@@ -1557,6 +1617,10 @@ function WikipatiApp() {
                       : undefined
                   }
                   onClose={() => {
+                    if (routerManaged && initialArticleSlug) {
+                      router.back();
+                      return;
+                    }
                     setArticle(null);
                     setArticleHistory([]);
                   }}

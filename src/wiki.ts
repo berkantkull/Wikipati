@@ -3,42 +3,55 @@ import { articles } from "./data";
 // Keep identifiers stable: existing saved favorites continue to point to these entries.
 const metadata: Record<
   string,
-  { title: string; headings: string[]; related: string[] }
+  { title: string; slug: string; headings: string[]; related: string[] }
 > = {
   "1": {
     title: "Kedi bakımı",
+    slug: "kedi-bakimi",
     headings: ["Genel bakım", "Bakım rutini"],
     related: ["3", "5", "2"],
   },
   "2": {
     title: "Aşı takvimi",
+    slug: "asi-takvimi",
     headings: ["Kişiye özel planlama", "Aşı kayıtları"],
     related: ["6", "1", "4"],
   },
   "3": {
     title: "Kedi beslenmesi",
+    slug: "kedi-beslenmesi",
     headings: ["Beslenme ihtiyaçları", "İştah takibi"],
     related: ["1", "5", "6"],
   },
   "4": {
     title: "Köpek bakımı",
+    slug: "kopek-bakimi",
     headings: ["Günlük bakım", "Koruyucu bakım"],
     related: ["2", "6", "5"],
   },
   "5": {
     title: "Davranış değişiklikleri",
+    slug: "davranis-degisiklikleri",
     headings: ["Gözlem ve kayıt", "Veteriner değerlendirmesi"],
     related: ["1", "4", "6"],
   },
   "6": {
     title: "Sağlık kayıtları",
+    slug: "saglik-kayitlari",
     headings: ["Kayıtların kapsamı", "Veteriner ziyaretine hazırlık"],
     related: ["2", "5", "4"],
   },
 };
+const fallbackSlugs: Record<string, string> = {
+  "7": "yavru-guvenli-ev",
+  "8": "ileri-yasta-bakim",
+  "9": "agiz-dis-bakimi",
+  "10": "gunluk-degisiklikler",
+};
 export const wikiArticles = articles.map((a) => ({
   ...a,
   title: metadata[a.id]?.title || a.title,
+  slug: metadata[a.id]?.slug || fallbackSlugs[a.id],
   sections: a.body.split("\n\n").map((text, index) => ({
     id: `section-${index}`,
     title: metadata[a.id]?.headings[index] || "Ek bilgiler",
