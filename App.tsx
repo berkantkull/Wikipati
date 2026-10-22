@@ -278,6 +278,15 @@ function WikipatiApp({
     };
     router.push(paths[next] as never);
   }
+  function closeArticle() {
+    if (routerManaged && initialArticleSlug) {
+      if (router.canGoBack()) router.back();
+      else router.replace("/kutuphane");
+      return;
+    }
+    setArticle(null);
+    setArticleHistory([]);
+  }
   useEffect(() => setTabState(initialTab), [initialTab]);
   useEffect(() => {
     if (!routerManaged || tab !== "library") return;
@@ -1750,14 +1759,7 @@ function WikipatiApp({
         <Modal
           visible={!!article}
           animationType="slide"
-          onRequestClose={() => {
-            if (routerManaged && initialArticleSlug) {
-              router.back();
-              return;
-            }
-            setArticle(null);
-            setArticleHistory([]);
-          }}
+          onRequestClose={closeArticle}
           onDismiss={() => {
             if (plannedArticle) {
               openEntry();
@@ -1799,14 +1801,7 @@ function WikipatiApp({
                         }
                       : undefined
                   }
-                  onClose={() => {
-                    if (routerManaged && initialArticleSlug) {
-                      router.back();
-                      return;
-                    }
-                    setArticle(null);
-                    setArticleHistory([]);
-                  }}
+                  onClose={closeArticle}
                   hasPet={!!pet}
                   onPlan={() => {
                     const topic = article.title;

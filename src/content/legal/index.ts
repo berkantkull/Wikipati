@@ -1,3 +1,4 @@
+// TASLAK – hukuki inceleme gerekli
 import { about } from "./about";
 import { kvkk } from "./kvkk";
 import { medical } from "./medical";
