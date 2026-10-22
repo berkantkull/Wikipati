@@ -46,6 +46,8 @@ export type Store = {
   checklist: Record<string, string[]>;
   trash: TrashItem[];
   onboardingDone?: boolean;
+  lastBackupAt?: string;
+  backupReminderSnoozedUntil?: string;
 };
 export const defaultPreferences: Preferences = {
   reminders: true,

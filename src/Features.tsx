@@ -409,6 +409,9 @@ export function Settings({
   onMessage: (s: string) => void;
 }) {
   const prefs = store.preferences;
+  const lastBackup = store.lastBackupAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(store.lastBackupAt).getTime()) / 86400000))
+    : null;
   const days = selectedDays(prefs);
   const [customHour, setCustomHour] = useState(
     String(prefs.hour).padStart(2, "0"),
@@ -639,6 +642,7 @@ export function Settings({
       </SettingsSection>
       <SettingsSection title="Kayıtlar ve yedekleme" subtitle="Kayıtlarını yedekle ve geri yükle" icon="folder-open-outline">
         {account}
+        <Text style={f.label}>Son yedek: {lastBackup == null ? "Henüz alınmadı" : lastBackup === 0 ? "Bugün" : `${lastBackup} gün önce`}</Text>
         <Text style={f.label}>Bu cihazda saklanır</Text>
         <Text style={f.muted}>
           Profillerin, bakım kayıtların ve hazırlık listelerin bu cihazda saklanır. Uygulamayı
@@ -655,8 +659,7 @@ export function Settings({
           onPress={onImport}
         />
         <Text style={f.small}>
-          JSON dosyası kayıt bilgilerini içerir. Fotoğraf ve belge dosyaları ve
-          çöp kutusu dahil değildir. Geri yüklemeden önce içeriği inceleyebilir ve aynı kayıtlar için hangi sürümün korunacağını seçebilirsin.
+          JSON dosyası kayıt bilgileriyle fotoğraf ve belgeleri içerir. Çöp kutusu dahil değildir. Geri yüklemeden önce içeriği inceleyebilir ve aynı kayıtlar için hangi sürümün korunacağını seçebilirsin.
         </Text>
       </SettingsSection>
       <SettingsSection title="Çöp kutusu" subtitle={`${store.trash.length} silinen öğe · Geri alınabilir`} icon="trash-outline">

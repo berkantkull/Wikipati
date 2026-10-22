@@ -66,7 +66,8 @@ import {
 } from "./src/Features";
 import { DateField } from "./src/DateField";
 import {
-  backupJSON,
+  backupJSONWithFiles,
+  backupSummary,
   parseBackup,
   mergeBackup,
   type Backup,
@@ -490,6 +491,12 @@ function WikipatiApp({
   const upcoming = store.entries
     .filter((e) => !e.done)
     .sort((a, b) => a.date.localeCompare(b.date));
+  const backupDue =
+    (store.pets.length > 0 || store.entries.length > 0) &&
+    (!store.backupReminderSnoozedUntil ||
+      new Date(store.backupReminderSnoozedUntil) <= new Date()) &&
+    (!store.lastBackupAt ||
+      Date.now() - new Date(store.lastBackupAt).getTime() >= 30 * 86400000);
   const filtered = articles
     .filter(
       (a) =>
@@ -724,8 +731,8 @@ function WikipatiApp({
       });
       if (result.canceled) return;
       const asset = result.assets[0];
-      if (asset.size && asset.size > 10_000_000)
-        throw Error("Yedek dosyası 10 MB sınırını aşıyor.");
+      if (asset.size && asset.size > 50_000_000)
+        throw Error("Yedek dosyası 50 MB sınırını aşıyor.");
       const raw =
         Platform.OS === "web"
           ? await (await fetch(asset.uri)).text()
@@ -740,8 +747,25 @@ function WikipatiApp({
   }, [backupPreview]);
   async function confirmImport() {
     if (!backupPreview) return;
+    let prepared = backupPreview;
+    if (Platform.OS !== "web" && backupPreview.formatVersion === 2) {
+      const restoreAsset = (data: string | undefined, name: string) => {
+        if (!data?.startsWith("data:")) return data;
+        const base64 = data.split(",", 2)[1];
+        if (!base64) throw Error("Yedekteki dosya okunamadı.");
+        const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+        const target = new File(Paths.document, `${uid()}-${name.replace(/[^a-zA-Z0-9.]/g, "_")}`);
+        target.write(bytes);
+        return target.uri;
+      };
+      prepared = {
+        ...backupPreview,
+        pets: backupPreview.pets.map((pet) => ({ ...pet, photo: restoreAsset(pet.photo, `${pet.id}.jpg`) })),
+        entries: backupPreview.entries.map((entry) => ({ ...entry, file: restoreAsset(entry.file, entry.fileName || `${entry.id}.bin`) })),
+      };
+    }
     const current = storeRef.current,
-      next = mergeBackup(current, backupPreview, useBackupVersions);
+      next = mergeBackup(current, prepared, useBackupVersions);
     const petCount = next.pets.length - current.pets.length,
       entryCount = next.entries.length - current.entries.length;
     if (await commit(next)) {
@@ -754,9 +778,24 @@ function WikipatiApp({
   }
   async function exportData() {
     try {
+      const payload = await backupJSONWithFiles(store, async (uri, name) => {
+        if (uri.startsWith("data:")) return uri;
+        if (Platform.OS === "web") {
+          const blob = await (await fetch(uri)).blob();
+          return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(Error("Dosya okunamadı"));
+            reader.readAsDataURL(blob);
+          });
+        }
+        const extension = name.split(".").pop()?.toLocaleLowerCase("tr-TR");
+        const mime = extension === "pdf" ? "application/pdf" : extension === "png" ? "image/png" : "image/jpeg";
+        return `data:${mime};base64,${await new File(uri).base64()}`;
+      });
       if (Platform.OS === "web") {
         const url = URL.createObjectURL(
-          new Blob([backupJSON(store)], {
+          new Blob([payload], {
             type: "application/json",
           }),
         );
@@ -765,11 +804,13 @@ function WikipatiApp({
         a.download = "wikipati-kayitlar.json";
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
+        await commit({ ...storeRef.current, lastBackupAt: new Date().toISOString() }, false);
         return;
       }
       const f = new File(Paths.cache, "wikipati-yedek.json");
-      f.write(backupJSON(store));
+      f.write(payload);
       await Sharing.shareAsync(f.uri, { mimeType: "application/json" });
+      await commit({ ...storeRef.current, lastBackupAt: new Date().toISOString() }, false);
     } catch {
       inform("Paylaşılamadı", "Bu cihazda paylaşım kullanılamıyor.");
     }
@@ -1067,6 +1108,22 @@ function WikipatiApp({
                 onAdd={openPet}
                 onPermission={enableNotifications}
               />
+            )}
+            {tab === "home" && backupDue && (
+              <View style={s.note}>
+                <View style={{ flex: 1, gap: 8 }}>
+                  <Text style={s.cardTitle}>Kayıtlarını güvene al</Text>
+                  <Text style={s.muted}>Son yedeğinin üzerinden 30 günden fazla geçti. Fotoğraf ve belgelerinle birlikte yeni bir yedek oluşturabilirsin.</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+                    <Action label="Şimdi yedekle" onPress={() => void exportData()} />
+                    <Action label="Daha sonra" onPress={() => {
+                      const next = new Date();
+                      next.setDate(next.getDate() + 14);
+                      void commit({ ...storeRef.current, backupReminderSnoozedUntil: next.toISOString() }, false);
+                    }} />
+                  </View>
+                </View>
+              </View>
             )}
             {tab === "home" && (
               <>
@@ -2005,8 +2062,7 @@ function WikipatiApp({
             >
               <Text style={s.sectionTitle}>Yedeği geri yükle</Text>
               <Text style={s.muted}>
-                {backupPreview?.pets.length} profil ve{" "}
-                {backupPreview?.entries.length} kayıt bulundu. Eksik kayıtlar
+                {backupPreview ? backupSummary(backupPreview).pets : 0} pati, {backupPreview ? backupSummary(backupPreview).entries : 0} kayıt, {backupPreview ? backupSummary(backupPreview).photos : 0} fotoğraf ve {backupPreview ? backupSummary(backupPreview).documents : 0} belge bulundu. Eksik kayıtlar
                 eklenir. Aynı kaydın iki farklı sürümü varsa hangisi
                 kullanılsın? Çöp kutusu ve bildirim ayarların korunur.
               </Text>
@@ -2022,8 +2078,8 @@ function WikipatiApp({
                 </Text>
               )}
               <Text style={s.muted}>
-                Fotoğraflar ve belgeler bu yedeğe dahil değildir. Yeni planlı
-                kayıtlar mevcut bildirim tercihlerine göre planlanır.
+                Fotoğraflar ve belgeler yeni biçimli yedeklere dahildir. Eski
+                yedekler de açılabilir. Yeni planlı kayıtlar mevcut bildirim tercihlerine göre planlanır.
               </Text>
               <Button
                 disabled={busy}

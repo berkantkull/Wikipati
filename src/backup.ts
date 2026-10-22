@@ -25,22 +25,32 @@ function date(v: unknown, optional = false): string {
   return d;
 }
 export type Backup = {
+  formatVersion: 1 | 2;
   pets: Pet[];
   entries: Entry[];
   favorites: string[];
   checklist: Record<string, string[]>;
 };
+const MAX_BACKUP_SIZE = 50_000_000;
+function portableAsset(value: unknown) {
+  if (value == null || value === "") return undefined;
+  if (typeof value !== "string") return fail();
+  const asset = value;
+  if (!asset.startsWith("data:") || asset.length > 20_000_000) return fail();
+  return asset;
+}
 export function parseBackup(raw: string): Backup {
-  if (raw.length > 10_000_000)
-    throw Error("Yedek dosyası 10 MB sınırını aşıyor.");
+  if (raw.length > MAX_BACKUP_SIZE)
+    throw Error("Yedek dosyası 50 MB sınırını aşıyor.");
   let root: any;
   try {
     root = JSON.parse(raw);
   } catch {
     return fail();
   }
-  if (root?.format && (root.format !== "wikipati" || root.version !== 1))
+  if (root?.format && (root.format !== "wikipati" || ![1, 2].includes(root.version)))
     return fail();
+  const formatVersion: 1 | 2 = root?.format ? root.version : 1;
   const data = root?.format ? root.data : root;
   if (
     !data ||
@@ -80,6 +90,7 @@ export function parseBackup(raw: string): Backup {
                 : fail(),
           }
         : {}),
+      ...(formatVersion === 2 && p.photo ? { photo: portableAsset(p.photo) } : {}),
     };
   });
   const entryIds = new Set<string>();
@@ -123,6 +134,8 @@ export function parseBackup(raw: string): Backup {
       ...(e.completedAt ? { completedAt: date(e.completedAt) } : {}),
       ...(e.postponedFrom ? { postponedFrom: date(e.postponedFrom) } : {}),
       ...(e.weight != null ? { weight: e.weight } : {}),
+      ...(formatVersion === 2 && e.file ? { file: portableAsset(e.file) } : {}),
+      ...(formatVersion === 2 && e.fileName ? { fileName: text(e.fileName) } : {}),
     };
   });
   const checklist: Record<string, string[]> = {};
@@ -139,6 +152,7 @@ export function parseBackup(raw: string): Backup {
     }
   }
   return {
+    formatVersion,
     pets,
     entries,
     favorites: data.favorites.map((f: unknown) => text(f)),
@@ -146,25 +160,65 @@ export function parseBackup(raw: string): Backup {
   };
 }
 export function backupJSON(store: Store) {
-  // Portable records only. Local paths and OS notification identifiers never leave the device.
+  // Only already-portable data URLs are retained by this synchronous helper.
   const data = parseBackup(
     JSON.stringify({
-      pets: store.pets,
-      entries: store.entries,
+      format: "wikipati",
+      version: 2,
+      data: {
+      pets: store.pets.map((pet) => ({
+        ...pet,
+        photo: pet.photo?.startsWith("data:") ? pet.photo : undefined,
+      })),
+      entries: store.entries.map((entry) => ({
+        ...entry,
+        file: entry.file?.startsWith("data:") ? entry.file : undefined,
+        notification: undefined,
+        notificationState: undefined,
+      })),
       favorites: store.favorites,
       checklist: store.checklist,
+      },
     }),
   );
   return JSON.stringify(
     {
       format: "wikipati",
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       data,
     },
     null,
     2,
   );
+}
+export async function backupJSONWithFiles(
+  store: Store,
+  readAsset: (uri: string, name: string) => Promise<string>,
+) {
+  const pets = await Promise.all(
+    store.pets.map(async (pet) => ({
+      ...pet,
+      photo: pet.photo ? await readAsset(pet.photo, `${pet.id}-profil.jpg`) : undefined,
+    })),
+  );
+  const entries = await Promise.all(
+    store.entries.map(async (entry) => ({
+      ...entry,
+      file: entry.file ? await readAsset(entry.file, entry.fileName || `${entry.id}-belge`) : undefined,
+      notification: undefined,
+      notificationState: undefined,
+    })),
+  );
+  return backupJSON({ ...store, pets, entries });
+}
+export function backupSummary(backup: Backup) {
+  return {
+    pets: backup.pets.length,
+    entries: backup.entries.length,
+    photos: backup.pets.filter((pet) => !!pet.photo).length,
+    documents: backup.entries.filter((entry) => !!entry.file).length,
+  };
 }
 export function mergeBackup(
   current: Store,
@@ -200,7 +254,7 @@ export function mergeBackup(
     pets: useBackupVersions
       ? pets.map((p) => {
           const incoming = backup.pets.find((x) => x.id === p.id);
-          return incoming ? { ...incoming, photo: p.photo } : p;
+          return incoming ? { ...incoming, photo: incoming.photo || p.photo } : p;
         })
       : pets,
     entries: [
@@ -210,8 +264,8 @@ export function mergeBackup(
         return incoming
           ? {
               ...incoming,
-              file: e.file,
-              fileName: e.fileName,
+              file: incoming.file || e.file,
+              fileName: incoming.fileName || e.fileName,
               notification: e.notification,
             }
           : e;
