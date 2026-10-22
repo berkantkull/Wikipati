@@ -57,9 +57,3 @@ Tarayıcı önizlemesinde profil ve bakım kaydı oluşturma akışları ayrıca
 
 24 Eylül doğrulaması: profil düzenleme, hazırlık listesi kalıcılığı, kilo ekleme/düzeltme, çizgi grafiği, kayıt silme/geri alma ve profilin bağlı kayıtlarla çöp kutusuna taşınması tarayıcıda denendi. Test için oluşturulan “Kontrol Patim Düzenlendi” profili ve iki ölçümü çöp kutusunda bırakıldı; geri alınabilir. Mevcut kullanıcı profillerine dokunulmadı. 11 otomatik test geçer. Windows Uygulama Denetimi `hermesc.exe` çalıştırılmasını engellediğinden standart bytecode export bu ortamda tamamlanamadı; JavaScript paket kontrolü `npx expo export --platform all --no-bytecode` ile yapılır. Bu komut üretim bytecode doğrulamasının yerine geçmez.
 
-## Kaynaklar
-
-- https://www.merckvetmanual.com/cat-owners/caring-for-cats/routine-health-care-of-cats
-- https://www.merckvetmanual.com/dog-owners/routine-care-of-dogs/routine-health-care-of-dogs
-- https://docs.expo.dev/versions/v57.0.0/sdk/notifications/
-- https://m1.material.io/patterns/settings.html
